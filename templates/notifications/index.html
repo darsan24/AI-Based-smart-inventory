@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block title %}AI Notification Center - Smart Inventory AI{% endblock %}
+{% block header_title %}AI Notification Center{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <!-- Critical Alerts -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card card-stats p-3 h-100 border-0" style="border-left: 4px solid var(--accent-red) !important;">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="text-secondary small fw-bold text-uppercase">Critical Alerts</div>
+                    <div class="fs-3 fw-bold text-danger mt-1" id="count-critical">0</div>
+                </div>
+                <div class="icon-box icon-red">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Warning Alerts -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card card-stats p-3 h-100 border-0" style="border-left: 4px solid var(--accent-amber) !important;">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="text-secondary small fw-bold text-uppercase">Warning Alerts</div>
+                    <div class="fs-3 fw-bold text-warning mt-1" id="count-warning">0</div>
+                </div>
+                <div class="icon-box icon-amber">
+                    <i class="fa-solid fa-bell"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- AI Insights -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card card-stats p-3 h-100 border-0" style="border-left: 4px solid var(--accent-blue) !important;">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="text-secondary small fw-bold text-uppercase">AI Insights</div>
+                    <div class="fs-3 fw-bold text-primary mt-1" id="count-insight">0</div>
+                </div>
+                <div class="icon-box icon-blue">
+                    <i class="fa-solid fa-lightbulb"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Healthy Products -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card card-stats p-3 h-100 border-0" style="border-left: 4px solid var(--accent-green) !important;">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="text-secondary small fw-bold text-uppercase">Healthy Products</div>
+                    <div class="fs-3 fw-bold text-success mt-1" id="count-healthy">0</div>
+                </div>
+                <div class="icon-box icon-green">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card p-3 mb-4 border-0 shadow-sm">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+        <span class="fw-bold text-secondary me-2"><i class="fa-solid fa-filter me-1"></i> Filter By:</span>
+        <button class="btn btn-sm btn-outline-secondary active filter-btn" data-filter="all">All</button>
+        <button class="btn btn-sm btn-outline-danger filter-btn" data-filter="Critical">Critical</button>
+        <button class="btn btn-sm btn-outline-warning filter-btn" data-filter="Warning">Warning</button>
+        <button class="btn btn-sm btn-outline-primary filter-btn" data-filter="AI Insights">AI Insights</button>
+        <button class="btn btn-sm btn-outline-success filter-btn" data-filter="Healthy">Healthy</button>
+        
+        <div class="vr mx-2 text-secondary"></div>
+        
+        <button class="btn btn-sm btn-outline-dark filter-btn" data-state="unread">Unread</button>
+        <button class="btn btn-sm btn-outline-dark filter-btn" data-state="read">Read</button>
+        
+        <div class="vr mx-2 text-secondary"></div>
+        
+        <button class="btn btn-sm btn-outline-dark filter-btn" data-time="today">Today</button>
+        <button class="btn btn-sm btn-outline-dark filter-btn" data-time="7days">Last 7 Days</button>
+    </div>
+</div>
+
+<!-- Notifications List -->
+<div class="row g-3" id="notificationsContainer">
+    {% for n in notifications %}
+    <div class="col-12 notification-card" 
+         data-id="{{ n.id }}" 
+         data-type="{{ n.type }}" 
+         data-date="{{ n.date }}">
+        
+        <div class="card border-0 shadow-sm overflow-hidden notif-inner">
+            <div class="row g-0">
+                <!-- Color Strip -->
+                <div class="col-auto bg-{{ n.color }}" style="width: 6px;"></div>
+                
+                <div class="col p-4">
+                    <div class="d-flex flex-column flex-md-row justify-content-between gap-3">
+                        
+                        <!-- Main Content -->
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="badge bg-{{ n.color }} px-2 py-1"><i class="fa-solid {{ n.icon }} me-1"></i> {{ n.type }}</span>
+                                <span class="text-muted small"><i class="fa-regular fa-clock me-1"></i> {{ n.date }}</span>
+                            </div>
+                            
+                            <h5 class="fw-bold text-dark mb-1">{{ n.product.name }}</h5>
+                            <div class="d-flex flex-wrap gap-2 text-secondary small mb-3">
+                                <span><i class="fa-solid fa-barcode me-1"></i> {{ n.product.product_id_str }}</span>
+                                <span class="border-start ps-2">{{ n.product.brand }}</span>
+                                <span class="border-start ps-2">{{ n.product.category }}</span>
+                            </div>
+                            
+                            <div class="bg-light p-3 rounded-3 border mb-3">
+                                <div class="row g-3">
+                                    <div class="col-6 col-md-3">
+                                        <div class="text-secondary small fw-bold text-uppercase mb-1">Current Stock</div>
+                                        <div class="fs-5 fw-bold text-dark">{{ n.product.current_stock }}</div>
+                                    </div>
+                                    <div class="col-6 col-md-3">
+                                        <div class="text-secondary small fw-bold text-uppercase mb-1">Reorder Level</div>
+                                        <div class="fs-5 fw-bold text-secondary">{{ n.product.reorder_level }}</div>
+                                    </div>
+                                    <div class="col-12 col-md-6 border-start-md">
+                                        <div class="text-secondary small fw-bold text-uppercase mb-1">15-Day AI Forecast</div>
+                                        <div class="fs-5 fw-bold text-primary">{{ n.pred_demand }} <span class="fs-6 text-muted font-normal">units</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-2">
+                                <span class="fw-bold text-dark">AI Explanation:</span> 
+                                <span class="text-secondary">{{ n.reason }}</span>
+                            </div>
+                            <div>
+                                <span class="fw-bold text-dark">Action Required:</span> 
+                                <span class="text-{{ n.color }} fw-semibold">{{ n.recommendation }}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Actions -->
+                        <div class="d-flex flex-md-column justify-content-center gap-2 align-items-end min-vw-auto" style="min-width: 140px;">
+                            <a href="{{ url_for('inventory.index', search=n.product.product_id_str) }}" class="btn btn-outline-primary btn-sm w-100 fw-bold">
+                                <i class="fa-solid fa-eye me-1"></i> View Product
+                            </a>
+                            <a href="{{ url_for('inventory.index') }}" class="btn btn-primary-custom btn-sm w-100 fw-bold">
+                                <i class="fa-solid fa-plus me-1"></i> Restock
+                            </a>
+                            <button class="btn btn-outline-secondary btn-sm w-100 fw-bold mark-read-btn" onclick="markAsRead('{{ n.id }}')">
+                                <i class="fa-solid fa-check-double me-1"></i> Mark Read
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm w-100 fw-bold" onclick="dismissNotification('{{ n.id }}')">
+                                <i class="fa-solid fa-xmark me-1"></i> Dismiss
+                            </button>
+                        </div>
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12 text-center text-secondary py-5">
+        <i class="fa-solid fa-bell-slash fs-1 text-muted mb-3"></i>
+        <div class="fw-semibold">No notifications available.</div>
+    </div>
+    {% endfor %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentFilterType = 'all';
+    let currentFilterState = 'all';
+    let currentFilterTime = 'all';
+
+    function loadState() {
+        let readNotifs = JSON.parse(localStorage.getItem('ai_notifs_read')) || [];
+        let dismissedNotifs = JSON.parse(localStorage.getItem('ai_notifs_dismissed')) || [];
+        
+        let cCount = 0;
+        let wCount = 0;
+        let iCount = 0;
+        let hCount = 0;
+
+        document.querySelectorAll('.notification-card').forEach(card => {
+            const id = card.getAttribute('data-id');
+            const type = card.getAttribute('data-type');
+            
+            // Hide dismissed
+            if (dismissedNotifs.includes(id)) {
+                card.style.display = 'none';
+                card.classList.add('is-dismissed');
+                return;
+            }
+            
+            // Check read
+            if (readNotifs.includes(id)) {
+                card.classList.add('is-read');
+                card.querySelector('.notif-inner').style.opacity = '0.65';
+                card.querySelector('.mark-read-btn').classList.add('d-none');
+            } else {
+                card.classList.remove('is-read');
+                card.querySelector('.notif-inner').style.opacity = '1';
+                card.querySelector('.mark-read-btn').classList.remove('d-none');
+            }
+            
+            // Update counts for visible (non-dismissed) cards
+            if (type === 'Critical') cCount++;
+            if (type === 'Warning') wCount++;
+            if (type === 'AI Insights') iCount++;
+            if (type === 'Healthy') hCount++;
+        });
+
+        document.getElementById('count-critical').innerText = cCount;
+        document.getElementById('count-warning').innerText = wCount;
+        document.getElementById('count-insight').innerText = iCount;
+        document.getElementById('count-healthy').innerText = hCount;
+        
+        applyFilters();
+        
+        // Refresh the global nav bell if the function exists
+        if(typeof fetchAndRenderNavNotifications === 'function') {
+            fetchAndRenderNavNotifications();
+        }
+    }
+
+    function markAsRead(id) {
+        let readNotifs = JSON.parse(localStorage.getItem('ai_notifs_read')) || [];
+        if (!readNotifs.includes(id)) {
+            readNotifs.push(id);
+            localStorage.setItem('ai_notifs_read', JSON.stringify(readNotifs));
+        }
+        loadState();
+    }
+
+    function dismissNotification(id) {
+        let dismissedNotifs = JSON.parse(localStorage.getItem('ai_notifs_dismissed')) || [];
+        if (!dismissedNotifs.includes(id)) {
+            dismissedNotifs.push(id);
+            localStorage.setItem('ai_notifs_dismissed', JSON.stringify(dismissedNotifs));
+        }
+        loadState();
+    }
+
+    function applyFilters() {
+        document.querySelectorAll('.notification-card:not(.is-dismissed)').forEach(card => {
+            const type = card.getAttribute('data-type');
+            const isRead = card.classList.contains('is-read');
+            // Simplified date filtering based on string match for demo
+            // In a real app we'd parse the date
+            
+            let showType = (currentFilterType === 'all' || type === currentFilterType);
+            
+            let showState = true;
+            if (currentFilterState === 'read') showState = isRead;
+            if (currentFilterState === 'unread') showState = !isRead;
+            
+            // Simplified time filter (everything generated is mostly today, but just an example)
+            let showTime = true;
+            
+            if (showType && showState && showTime) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (this.hasAttribute('data-filter')) {
+                document.querySelectorAll('[data-filter]').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentFilterType = this.getAttribute('data-filter');
+            }
+            if (this.hasAttribute('data-state')) {
+                document.querySelectorAll('[data-state]').forEach(b => b.classList.remove('active'));
+                if (currentFilterState === this.getAttribute('data-state')) {
+                    currentFilterState = 'all'; // toggle off
+                } else {
+                    this.classList.add('active');
+                    currentFilterState = this.getAttribute('data-state');
+                }
+            }
+            if (this.hasAttribute('data-time')) {
+                document.querySelectorAll('[data-time]').forEach(b => b.classList.remove('active'));
+                if (currentFilterTime === this.getAttribute('data-time')) {
+                    currentFilterTime = 'all'; // toggle off
+                } else {
+                    this.classList.add('active');
+                    currentFilterTime = this.getAttribute('data-time');
+                }
+            }
+            
+            applyFilters();
+        });
+    });
+
+    document.addEventListener("DOMContentLoaded", loadState);
+</script>
+{% endblock %}

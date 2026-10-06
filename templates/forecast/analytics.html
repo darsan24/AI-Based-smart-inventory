@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+
+{% block title %}Forecast Analytics - Smart Inventory AI{% endblock %}
+{% block header_title %}Forecast Analytics Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chart-container {
+        position: relative;
+        height: 300px;
+        width: 100%;
+    }
+    .chart-container-large {
+        position: relative;
+        height: 400px;
+        width: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Filters Row -->
+<div class="card p-3 border-0 shadow-sm mb-4 bg-white">
+    <div class="row g-3 align-items-end">
+        <div class="col-6 col-md-2">
+            <label class="form-label text-secondary small fw-bold mb-1"><i class="fa-solid fa-box me-1"></i> TYPE</label>
+            <select id="filterProductType" class="form-select bg-light">
+                <option value="">All Types</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label text-secondary small fw-bold mb-1"><i class="fa-solid fa-layer-group me-1"></i> CATEGORY</label>
+            <select id="filterCategory" class="form-select bg-light">
+                <option value="">All Categories</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label text-secondary small fw-bold mb-1"><i class="fa-solid fa-tag me-1"></i> BRAND</label>
+            <select id="filterBrand" class="form-select bg-light">
+                <option value="">All Brands</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label text-secondary small fw-bold mb-1"><i class="fa-solid fa-calendar-day me-1"></i> HORIZON</label>
+            <select id="filterHorizon" class="form-select bg-light" onchange="updateDashboard()">
+                <option value="7">7 Days</option>
+                <option value="15" selected>15 Days</option>
+                <option value="30">30 Days</option>
+            </select>
+        </div>
+        <div class="col-12 col-md-2 d-flex gap-2">
+            <button class="btn btn-primary-custom w-100 fw-bold" onclick="updateDashboard()"><i class="fa-solid fa-filter me-1"></i> Apply</button>
+            <button class="btn btn-outline-secondary w-100 fw-bold" onclick="resetFilters()"><i class="fa-solid fa-rotate-right me-1"></i> Reset</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- KPI Cards Row -->
+<div class="row g-4 mb-4">
+    <div class="col-6 col-md-4">
+        <div class="card p-4 border-0 shadow-sm h-100" style="border-left: 4px solid var(--accent-blue) !important;">
+            <div class="text-secondary small fw-bold text-uppercase mb-1">Total Predicted Demand</div>
+            <div class="fs-2 fw-bold text-dark" id="kpiTotalDemand">0</div>
+            <div class="text-muted small mt-2"><i class="fa-solid fa-arrow-trend-up text-success me-1"></i> Based on selected horizon</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4">
+        <div class="card p-4 border-0 shadow-sm h-100" style="border-left: 4px solid var(--accent-amber) !important;">
+            <div class="text-secondary small fw-bold text-uppercase mb-1">Current Stock Gap</div>
+            <div class="fs-2 fw-bold text-warning" id="kpiStockGap">0</div>
+            <div class="text-muted small mt-2"><i class="fa-solid fa-triangle-exclamation text-warning me-1"></i> Shortfall against prediction</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="card p-4 border-0 shadow-sm h-100" style="border-left: 4px solid var(--accent-green) !important;">
+            <div class="text-secondary small fw-bold text-uppercase mb-1">Top Trending Category</div>
+            <div class="fs-3 fw-bold text-success mt-1 text-truncate" id="kpiTopCategory">-</div>
+            <div class="text-muted small mt-2"><i class="fa-solid fa-crown text-warning me-1"></i> Highest forecasted demand</div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Charts Row -->
+<div class="row g-4 mb-4">
+    <!-- Stock vs Demand Bar Chart -->
+    <div class="col-md-8">
+        <div class="card p-4 border-0 shadow-sm h-100">
+            <h5 class="fw-bold text-dark mb-4"><i class="fa-solid fa-chart-column text-primary me-2"></i> Current Stock vs Predicted Demand (Top 10)</h5>
+            <div class="chart-container-large">
+                <canvas id="stockDemandChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Category & Brand Charts -->
+    <div class="col-md-4">
+        <div class="row g-4 h-100">
+            <div class="col-12">
+                <div class="card p-4 border-0 shadow-sm">
+                    <h6 class="fw-bold text-dark mb-3"><i class="fa-solid fa-chart-pie text-purple me-2"></i> Demand by Category</h6>
+                    <div class="chart-container" style="height: 200px;">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="card p-4 border-0 shadow-sm">
+                    <h6 class="fw-bold text-dark mb-3"><i class="fa-solid fa-chart-pie text-success me-2"></i> Demand by Brand</h6>
+                    <div class="chart-container" style="height: 200px;">
+                        <canvas id="brandChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lists Row -->
+<div class="row g-4 mb-4">
+    <!-- High Demand Products -->
+    <div class="col-md-6">
+        <div class="card p-4 border-0 shadow-sm h-100">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="fw-bold text-dark mb-0"><i class="fa-solid fa-arrow-trend-up text-success me-2"></i> High Demand Products</h5>
+                <span class="badge bg-success bg-opacity-10 text-success border border-success">Top 5</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Product Name</th>
+                            <th class="text-end">Predicted</th>
+                            <th class="text-end">Stock</th>
+                        </tr>
+                    </thead>
+                    <tbody id="highDemandTable">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Low Demand Products -->
+    <div class="col-md-6">
+        <div class="card p-4 border-0 shadow-sm h-100">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="fw-bold text-dark mb-0"><i class="fa-solid fa-arrow-trend-down text-danger me-2"></i> Low Demand Products</h5>
+                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">Bottom 5</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Product Name</th>
+                            <th class="text-end">Predicted</th>
+                            <th class="text-end">Stock</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lowDemandTable">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JSON Data Injection -->
+<script id="productDataJson" type="application/json">
+    {{ product_data_json | safe }}
+</script>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const rawData = JSON.parse(document.getElementById('productDataJson').textContent);
+    let stockDemandChartInstance = null;
+    let categoryChartInstance = null;
+    let brandChartInstance = null;
+
+    Chart.register({
+        id: 'noData',
+        afterDraw: function(chart) {
+            if (chart.data.datasets.length === 0 || chart.data.datasets[0].data.length === 0) {
+                let ctx = chart.ctx;
+                let width = chart.width;
+                let height = chart.height;
+                chart.clear();
+                
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = "bold 14px 'Inter', sans-serif";
+                ctx.fillStyle = "#374151";
+                ctx.fillText('No forecast data available for the selected filters.', width / 2, height / 2);
+                ctx.restore();
+            }
+        }
+    });
+
+    function initFilters() {
+        const filterManager = new DependentFilterManager({
+            typeEl: 'filterProductType',
+            categoryEl: 'filterCategory',
+            brandEl: 'filterBrand',
+            dataSource: rawData,
+            placeholderType: 'All Types',
+            placeholderCategory: 'All Categories',
+            placeholderBrand: 'All Brands',
+            onChangeCallback: () => updateDashboard()
+        });
+
+        // Store manager for reset purposes
+        window.forecastFilterManager = filterManager;
+    }
+
+    function resetFilters() {
+        if (window.forecastFilterManager) {
+            window.forecastFilterManager.reset();
+        }
+        $('#filterHorizon').val('15').trigger('change');
+        updateDashboard();
+    }
+
+    function getHorizonKey() {
+        return 'forecast_' + (document.getElementById('filterHorizon').value || '15') + 'd';
+    }
+
+    function updateDashboard() {
+        const rawType = (document.getElementById('filterProductType').value || '').trim();
+        const rawCat = (document.getElementById('filterCategory').value || '').trim();
+        const rawBrand = (document.getElementById('filterBrand').value || '').trim();
+        const horizonKey = getHorizonKey();
+
+        const selectedType = rawType.toLowerCase() === 'all' || rawType.toLowerCase().startsWith('all ') ? '' : rawType;
+        const selectedCat = rawCat.toLowerCase() === 'all' || rawCat.toLowerCase().startsWith('all ') ? '' : rawCat;
+        const selectedBrand = rawBrand.toLowerCase() === 'all' || rawBrand.toLowerCase().startsWith('all ') ? '' : rawBrand;
+
+        // Filter data
+        let filteredData = rawData.filter(p => {
+            let matchType = !selectedType || (p.product_type && p.product_type.toLowerCase() === selectedType.toLowerCase());
+            let matchCat = !selectedCat || (p.category && p.category.toLowerCase() === selectedCat.toLowerCase());
+            let matchBrand = !selectedBrand || (p.brand && p.brand.toLowerCase() === selectedBrand.toLowerCase());
+            return matchType && matchCat && matchBrand;
+        });
+
+        // 1. Update KPIs
+        let totalDemand = filteredData.reduce((sum, p) => sum + p[horizonKey], 0);
+        let totalStock = filteredData.reduce((sum, p) => sum + p.current_stock, 0);
+        let stockGap = Math.max(0, totalDemand - totalStock);
+        
+        document.getElementById('kpiTotalDemand').innerText = Math.round(totalDemand).toLocaleString();
+        document.getElementById('kpiStockGap').innerText = Math.round(stockGap).toLocaleString();
+
+        // Top Category
+        let catAgg = {};
+        filteredData.forEach(p => {
+            catAgg[p.category] = (catAgg[p.category] || 0) + p[horizonKey];
+        });
+        let topCat = Object.keys(catAgg).sort((a,b) => catAgg[b] - catAgg[a])[0] || 'N/A';
+        document.getElementById('kpiTopCategory').innerText = topCat;
+
+        // 2. Main Chart: Stock vs Demand
+        filteredData.sort((a, b) => b[horizonKey] - a[horizonKey]);
+        let top10 = filteredData.slice(0, 10);
+        
+        updateBarChart(top10, horizonKey);
+        
+        // 3. Category & Brand Pie Charts
+        updatePieChart(categoryChartInstance, 'categoryChart', catAgg, 'Category Demand');
+        
+        let brandAgg = {};
+        filteredData.forEach(p => {
+            brandAgg[p.brand] = (brandAgg[p.brand] || 0) + p[horizonKey];
+        });
+        updatePieChart(brandChartInstance, 'brandChart', brandAgg, 'Brand Demand', 'doughnut');
+
+        // 4. Update Tables
+        updateTables(filteredData, horizonKey);
+    }
+
+    function updateBarChart(data, horizonKey) {
+        const ctx = document.getElementById('stockDemandChart').getContext('2d');
+        const labels = data.map(p => p.name.length > 20 ? p.name.substring(0,20)+'...' : p.name);
+        const demandData = data.map(p => p[horizonKey]);
+        const stockData = data.map(p => p.current_stock);
+
+        let demandGradient = createPremiumGradient(ctx, 'rgba(124, 58, 237, 0.85)', 'rgba(168, 85, 247, 0.85)', 400);
+        let stockGradient = createPremiumGradient(ctx, 'rgba(14, 165, 233, 0.85)', 'rgba(56, 189, 248, 0.85)', 400);
+
+        if (stockDemandChartInstance) {
+            stockDemandChartInstance.destroy();
+        }
+
+        stockDemandChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Predicted Demand',
+                        data: demandData,
+                        backgroundColor: demandGradient,
+                        hoverBackgroundColor: '#9333EA',
+                        borderRadius: 12,
+                        borderSkipped: false
+                    },
+                    {
+                        label: 'Current Stock',
+                        data: stockData,
+                        backgroundColor: stockGradient,
+                        hoverBackgroundColor: '#0284C7',
+                        borderRadius: 12,
+                        borderSkipped: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { grid: { display: false } },
+                    y: { 
+                        beginAtZero: true,
+                        grid: { color: '#E5E7EB', drawBorder: false }
+                    }
+                },
+                plugins: {
+                    legend: { 
+                        position: 'top',
+                        labels: { padding: 20, usePointStyle: true, pointStyle: 'circle' }
+                    }
+                }
+            }
+        });
+    }
+
+    function updatePieChart(chartInstance, canvasId, aggData, title, type='pie') {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        const labels = Object.keys(aggData);
+        const data = Object.values(aggData);
+        
+        // Premium Colors palette
+        const colors = [
+            '#14B8A6', '#7C3AED', '#0EA5E9', '#F59E0B', 
+            '#EC4899', '#22C55E', '#EF4444', '#6366F1'
+        ];
+
+        if (window[canvasId + 'Instance']) {
+            window[canvasId + 'Instance'].destroy();
+        }
+
+        window[canvasId + 'Instance'] = new Chart(ctx, {
+            type: type,
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: colors.slice(0, labels.length),
+                    borderWidth: 2,
+                    borderColor: '#ffffff',
+                    hoverOffset: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { boxWidth: 10, usePointStyle: true, padding: 15 }
+                    }
+                }
+            }
+        });
+    }
+
+    function updateTables(data, horizonKey) {
+        const highTbody = document.getElementById('highDemandTable');
+        const lowTbody = document.getElementById('lowDemandTable');
+        highTbody.innerHTML = '';
+        lowTbody.innerHTML = '';
+
+        if (data.length === 0) {
+            const emptyRow = '<tr><td colspan="3" class="text-center text-muted py-4 fw-bold">No forecast data available for the selected filters.</td></tr>';
+            highTbody.innerHTML = emptyRow;
+            lowTbody.innerHTML = emptyRow;
+            return;
+        }
+
+        let sorted = [...data].sort((a, b) => b[horizonKey] - a[horizonKey]);
+        
+        // High Demand
+        sorted.slice(0, 5).forEach(p => {
+            highTbody.innerHTML += `
+                <tr>
+                    <td class="fw-semibold text-dark">${p.name}</td>
+                    <td class="text-end fw-bold text-primary">${Math.round(p[horizonKey])}</td>
+                    <td class="text-end ${p.current_stock < p[horizonKey] ? 'text-danger' : 'text-secondary'}">${p.current_stock}</td>
+                </tr>
+            `;
+        });
+        
+        // Low Demand (excluding 0)
+        let lowSorted = sorted.filter(p => p[horizonKey] > 0).reverse();
+        if (lowSorted.length === 0) {
+            lowTbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">No low demand products found.</td></tr>';
+        } else {
+            lowSorted.slice(0, 5).forEach(p => {
+                lowTbody.innerHTML += `
+                    <tr>
+                        <td class="fw-semibold text-dark">${p.name}</td>
+                        <td class="text-end fw-bold text-secondary">${Math.round(p[horizonKey])}</td>
+                        <td class="text-end text-secondary">${p.current_stock}</td>
+                    </tr>
+                `;
+            });
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        initFilters();
+        updateDashboard();
+    });
+</script>
+{% endblock %}

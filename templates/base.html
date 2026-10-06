@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Smart Inventory & Demand Forecasting AI{% endblock %}</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome 6 Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Set global defaults for premium high-contrast charts
+        Chart.defaults.color = '#374151'; // Tailwind gray-700 (High contrast)
+        Chart.defaults.font.family = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        Chart.defaults.font.weight = '500';
+        Chart.defaults.font.size = 13;
+
+        // Premium Animations
+        Chart.defaults.animation = {
+            duration: 1200,
+            easing: 'easeOutQuart'
+        };
+
+        // Premium Tooltips
+        Chart.defaults.plugins.tooltip = {
+            backgroundColor: 'rgba(17, 24, 39, 0.95)', // Tailwind gray-900 with opacity
+            titleColor: '#F9FAFB', // Tailwind gray-50
+            bodyColor: '#F3F4F6', // Tailwind gray-100
+            titleFont: { size: 14, weight: 'bold', family: "'Inter', sans-serif" },
+            bodyFont: { size: 13, family: "'Inter', sans-serif" },
+            padding: 12,
+            cornerRadius: 8,
+            boxPadding: 6,
+            usePointStyle: true,
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+            borderWidth: 1,
+            displayColors: true
+        };
+
+        // Utility function for creating rich gradients
+        function createPremiumGradient(ctx, colorStart, colorEnd, height=300) {
+            const gradient = ctx.createLinearGradient(0, 0, 0, height);
+            gradient.addColorStop(0, colorStart);
+            gradient.addColorStop(1, colorEnd);
+            return gradient;
+        }
+
+        // Utility function for Indian currency formatting in charts (Thousand/Lakh/Crore)
+        function formatIndianCurrency(value) {
+            if (value === null || value === undefined || isNaN(value)) return '₹0';
+            const num = Number(value);
+            const absValue = Math.abs(num);
+            if (absValue >= 10000000) {
+                return '₹' + (num / 10000000).toFixed(2) + ' Cr';
+            } else if (absValue >= 100000) {
+                return '₹' + (num / 100000).toFixed(2) + ' L';
+            } else if (absValue >= 1000) {
+                return '₹' + (num / 1000).toFixed(1) + ' K';
+            }
+            return '₹' + Math.round(num);
+        }
+    </script>
+    <!-- jQuery (required for Select2) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <!-- Select2 CSS & JS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+
+    {% if session.get('user_id') and not (request.endpoint and request.endpoint.startswith('auth.')) %}
+    <div id="sidebar-overlay"></div>
+    <div class="d-flex" id="wrapper">
+        <!-- Sidebar Navigation -->
+        <div id="sidebar-wrapper" class="d-flex flex-column">
+            <div class="sidebar-heading flex-shrink-0">
+                <i class="fa-solid fa-boxes-stacked fa-lg"></i>
+                <span>Inventory AI</span>
+            </div>
+
+            <!-- Scrollable Navigation Container -->
+            <div class="sidebar-scrollable flex-grow-1" style="overflow-y: auto; overflow-x: hidden;">
+                <div class="list-group list-group-flush my-2">
+                    <!-- DASHBOARD -->
+                    <div class="px-3 pt-3 pb-1 text-uppercase text-secondary small fw-bold"
+                        style="font-size: 0.75rem; letter-spacing: 0.5px;">Dashboard</div>
+                    <a href="{{ url_for('dashboard.index') }}"
+                        class="list-group-item-sidebar {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
+                        <i class="fa-solid fa-chart-line"></i> Dashboard
+                    </a>
+                    <a href="{{ url_for('reports.analytics') }}"
+                        class="list-group-item-sidebar {% if request.endpoint == 'reports.analytics' %}active{% endif %}">
+                        <i class="fa-solid fa-chart-pie"></i> Inventory Performance KPIs
+                    </a>
+
+                    <!-- INVENTORY -->
+                    <div class="px-3 pt-3 pb-1 text-uppercase text-secondary small fw-bold"
+                        style="font-size: 0.75rem; letter-spacing: 0.5px;">Inventory</div>
+                    <a href="{{ url_for('products.list_products') }}"
+                        class="list-group-item-sidebar {% if request.endpoint and 'products' in request.endpoint %}active{% endif %}">
+                        <i class="fa-solid fa-box"></i> Product Catalog
+                    </a>
+                    <a href="{{ url_for('inventory.index') }}"
+                        class="list-group-item-sidebar {% if request.endpoint == 'inventory.index' %}active{% endif %}">
+                        <i class="fa-solid fa-warehouse"></i> Inventory Stock
+                    </a>
+                    <a href="{{ url_for('inventory.reorder_recommendations') }}"
+                        class="list-group-item-sidebar {% if request.endpoint == 'inventory.reorder_recommendations' %}active{% endif %}">
+                        <i class="fa-solid fa-truck-fast text-warning"></i> Reorder Recommendations
+                    </a>
+
+                    <!-- SALES -->
+                    <div class="px-3 pt-3 pb-1 text-uppercase text-secondary small fw-bold"
+                        style="font-size: 0.75rem; letter-spacing: 0.5px;">Sales</div>
+                    <a href="{{ url_for('sales.entry') }}"
+                        class="list-group-item-sidebar {% if request.endpoint == 'sales.entry' %}active{% endif %}">
+                        <i class="fa-solid fa-cart-shopping"></i> Sales Entry
+                    </a>
+                    <a href="{{ url_for('sales.history') }}"
+                        class="list-group-item-sidebar {% if request.endpoint == 'sales.history' %}active{% endif %}">
+                        <i class="fa-solid fa-clock-rotate-left"></i> Sales History
+                    </a>
+                    <a href="{{ url_for('sales.upload_csv') }}"
+                        class="list-group-item-sidebar {% if request.endpoint == 'sales.upload_csv' %}active{% endif %}">
+                        <i class="fa-solid fa-file-csv"></i> CSV Sales Upload
+                    </a>
+
+                    <!-- AI & FORECASTING -->
+                    <div class="px-3 pt-3 pb-1 text-uppercase text-secondary small fw-bold"
+                        style="font-size: 0.75rem; letter-spacing: 0.5px;">AI & Forecasting</div>
+                    <a href="{{ url_for('forecast.index') }}"
+                        class="list-group-item-sidebar {% if request.endpoint == 'forecast.index' %}active{% endif %}">
+                        <i class="fa-solid fa-brain"></i> Demand Forecasting
+                    </a>
+                    <a href="{{ url_for('forecast.analytics') }}"
+                        class="list-group-item-sidebar {% if request.endpoint == 'forecast.analytics' %}active{% endif %}">
+                        <i class="fa-solid fa-chart-line text-info"></i> Forecast Analytics
+                    </a>
+                    <a href="{{ url_for('notifications.index') }}"
+                        class="list-group-item-sidebar {% if request.endpoint == 'notifications.index' %}active{% endif %}">
+                        <i class="fa-solid fa-bell text-warning"></i> AI Notification Center
+                    </a>
+
+                    <!-- REPORTS -->
+                    <div class="px-3 pt-3 pb-1 text-uppercase text-secondary small fw-bold"
+                        style="font-size: 0.75rem; letter-spacing: 0.5px;">Reports</div>
+                    <a href="{{ url_for('reports.index') }}"
+                        class="list-group-item-sidebar {% if request.endpoint == 'reports.index' %}active{% endif %}">
+                        <i class="fa-solid fa-file-invoice"></i> Reports & Export
+                    </a>
+
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Page Content Wrapper -->
+        <div id="page-content-wrapper">
+            <!-- Top Navbar -->
+            <nav class="navbar navbar-expand-lg navbar-custom">
+                <div class="container-fluid">
+                    <button id="sidebarToggle" class="btn btn-outline-custom me-3" aria-label="Toggle sidebar" aria-expanded="true" type="button">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <span class="navbar-text fw-bold text-dark fs-5">
+                        {% block header_title %}Admin Control Panel{% endblock %}
+                    </span>
+                    <div class="d-flex align-items-center gap-3 ms-auto">
+                        <!-- Low-Stock Indicator Icon (compact, bell-matching style) -->
+                        {% if global_low_stock_count > 0 %}
+                        <a href="{{ url_for('inventory.index', filter='low_stock') }}"
+                            class="btn btn-outline-custom position-relative border-0 shadow-sm rounded-circle d-flex align-items-center justify-content-center bg-white"
+                            title="{{ global_low_stock_count }} product(s) at or below reorder level"
+                            style="width: 38px; height: 38px; box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;">
+                            <i class="fa-solid fa-box-open text-warning fs-5"></i>
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark border border-white"
+                                style="font-size: 0.65rem; transform: translate(-40%, -20%) !important;">
+                                {{ global_low_stock_count }}
+                            </span>
+                        </a>
+                        {% endif %}
+
+                        <!-- AI Notification Bell -->
+                        <div class="dropdown">
+                            <button
+                                class="btn btn-outline-custom position-relative border-0 shadow-sm rounded-circle d-flex align-items-center justify-content-center bg-white"
+                                type="button" data-bs-toggle="dropdown" id="notificationDropdownBtn"
+                                style="width: 38px; height: 38px; box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;">
+                                <i class="fa-solid fa-bell text-primary fs-5"></i>
+                                <span id="unreadBadge"
+                                    class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none border border-white"
+                                    style="font-size: 0.65rem; transform: translate(-40%, -20%) !important;">
+                                    0
+                                </span>
+                            </button>
+                            <div class="dropdown-menu dropdown-menu-end shadow-lg border-0 p-0 rounded-3 mt-2"
+                                style="width: 380px; z-index: 1050;">
+                                <!-- Fixed Header -->
+                                <div
+                                    class="px-3 py-3 bg-light border-bottom rounded-top d-flex align-items-center justify-content-between">
+                                    <span class="fw-bold text-dark m-0 fs-6"><i
+                                            class="fa-solid fa-bell text-primary me-2"></i>AI Notifications</span>
+                                    <span
+                                        class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle">Recent</span>
+                                </div>
+
+                                <!-- Scrollable Body -->
+                                <div style="max-height: 400px; overflow-y: auto; overflow-x: hidden;"
+                                    class="custom-scroll bg-white">
+                                    <div id="emptyNotificationItem" class="d-none text-center text-muted small py-5">
+                                        <i class="fa-solid fa-bell-slash fs-2 mb-2 text-secondary"></i><br>
+                                        No unread notifications
+                                    </div>
+                                    <div id="dynamicNotifications"></div>
+                                </div>
+
+                                <!-- Fixed Footer -->
+                                <div class="p-2 bg-light border-top rounded-bottom text-center">
+                                    <a class="btn btn-primary w-100 fw-bold shadow-sm"
+                                        href="{{ url_for('notifications.index') }}" style="border-radius: 6px;">View
+                                        Notification Center</a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dropdown">
+                            <button class="btn btn-outline-custom dropdown-toggle" type="button"
+                                data-bs-toggle="dropdown">
+                                <i class="fa-solid fa-user-circle me-1 text-primary"></i> <span id="topNavUsername">{{ session.get('name') or session.get('username', 'Admin') }}</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                                <li><a class="dropdown-item" href="{{ url_for('dashboard.index') }}"><i
+                                            class="fa-solid fa-gauge me-2 text-secondary"></i> Dashboard</a></li>
+
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
+                                <li><a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}"><i
+                                            class="fa-solid fa-right-from-bracket me-2"></i> Logout</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main Body Content -->
+            <div class="container-fluid page-body-container">
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show border-0 shadow-sm mb-4"
+                    role="alert">
+                    <i
+                        class="fa-solid {% if category == 'success' %}fa-circle-check{% elif category == 'danger' %}fa-circle-xmark{% else %}fa-circle-info{% endif %} me-2"></i>
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- Public / Login Wrapper -->
+    {% block login_content %}{% endblock %}
+    {% endif %}
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Custom Scripts -->
+    <script src="{{ url_for('static', filename='js/dependent_filters.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/horizontal_scroll.js') }}"></script>
+
+    <script>
+        // Global notification logic for base template
+        function fetchAndRenderNavNotifications() {
+            if (!document.getElementById('unreadBadge')) return;
+
+            let readNotifs = JSON.parse(localStorage.getItem('ai_notifs_read')) || [];
+            let dismissedNotifs = JSON.parse(localStorage.getItem('ai_notifs_dismissed')) || [];
+
+            fetch("{{ url_for('notifications.api_list') }}")
+                .then(res => res.json())
+                .then(data => {
+                    const container = document.getElementById('dynamicNotifications');
+                    const badge = document.getElementById('unreadBadge');
+                    const emptyMsg = document.getElementById('emptyNotificationItem');
+
+                    container.innerHTML = '';
+
+                    // Filter out dismissed notifications
+                    const visibleNotifs = data.filter(n => !dismissedNotifs.includes(n.id));
+                    const unreadNotifs = visibleNotifs.filter(n => !readNotifs.includes(n.id));
+
+                    if (unreadNotifs.length > 0) {
+                        badge.textContent = unreadNotifs.length > 99 ? '99+' : unreadNotifs.length;
+                        badge.classList.remove('d-none');
+                        emptyMsg.classList.add('d-none');
+                    } else {
+                        badge.classList.add('d-none');
+                        emptyMsg.classList.remove('d-none');
+                    }
+
+                    // Show top 5 unread in dropdown
+                    const topUnread = unreadNotifs.slice(0, 5);
+                    topUnread.forEach(n => {
+                        const item = document.createElement('div');
+                        item.innerHTML = `
+                        <a class="dropdown-item py-3 px-3 border-bottom text-wrap" href="{{ url_for('notifications.index') }}" style="white-space: normal; transition: background-color 0.2s ease;">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="mt-1 bg-${n.color} bg-opacity-10 rounded p-2 text-center" style="min-width: 36px; height: 36px;">
+                                    <i class="fa-solid ${n.icon} text-${n.color}"></i>
+                                </div>
+                                <div class="flex-grow-1" style="min-width: 0;">
+                                    <div class="fw-bold small text-dark mb-1 lh-sm">${n.product.name}</div>
+                                    <div class="text-secondary lh-sm" style="font-size: 0.8rem;">${n.reason}</div>
+                                </div>
+                            </div>
+                        </a>
+                    `;
+                        container.appendChild(item);
+                    });
+                })
+                .catch(err => console.error("Error fetching notifications", err));
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            fetchAndRenderNavNotifications();
+            // Refresh every 5 minutes
+            setInterval(fetchAndRenderNavNotifications, 300000);
+        });
+    </script>
+
+
+    <!-- Smart Inventory Centralized Dependent Filter Manager -->
+    <script src="{{ url_for('static', filename='js/dependent_filters.js') }}"></script>
+
+    {% block extra_js %}{% endblock %}
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const toggleBtn = document.getElementById('sidebarToggle');
+            const sidebar = document.getElementById('sidebar-wrapper');
+            const overlay = document.getElementById('sidebar-overlay');
+            const wrapper = document.getElementById('wrapper');
+
+            if (!toggleBtn || !sidebar || !overlay || !wrapper) return;
+
+            // Breakpoint detection
+            function isDesktop() {
+                return window.innerWidth >= 1024;
+            }
+
+            // Restore sidebar state from localStorage on desktop
+            const savedState = localStorage.getItem('sidebarCollapsed');
+            if (isDesktop() && savedState === 'true') {
+                wrapper.classList.add('sidebar-collapsed');
+                toggleBtn.setAttribute('aria-expanded', 'false');
+            }
+
+            function toggleSidebar() {
+                if (isDesktop()) {
+                    // Desktop: toggle collapsed class on wrapper
+                    wrapper.classList.toggle('sidebar-collapsed');
+                    const isCollapsed = wrapper.classList.contains('sidebar-collapsed');
+                    toggleBtn.setAttribute('aria-expanded', String(!isCollapsed));
+                    localStorage.setItem('sidebarCollapsed', String(isCollapsed));
+                } else {
+                    // Tablet/Mobile: toggle off-canvas show
+                    sidebar.classList.toggle('show');
+                    overlay.classList.toggle('show');
+                    const isOpen = sidebar.classList.contains('show');
+                    toggleBtn.setAttribute('aria-expanded', String(isOpen));
+                }
+            }
+
+            function closeMobileSidebar() {
+                if (!isDesktop()) {
+                    sidebar.classList.remove('show');
+                    overlay.classList.remove('show');
+                    toggleBtn.setAttribute('aria-expanded', 'false');
+                }
+            }
+
+            // Toggle button click
+            toggleBtn.addEventListener('click', toggleSidebar);
+
+            // Keyboard accessibility: Enter and Space
+            toggleBtn.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleSidebar();
+                }
+            });
+
+            // Overlay click closes sidebar
+            overlay.addEventListener('click', closeMobileSidebar);
+
+            // Close sidebar on mobile when clicking a menu item
+            const menuItems = document.querySelectorAll('.list-group-item-sidebar');
+            menuItems.forEach(item => {
+                item.addEventListener('click', closeMobileSidebar);
+            });
+
+            // Handle viewport resize: clean up conflicting states
+            let prevDesktop = isDesktop();
+            window.addEventListener('resize', function () {
+                const nowDesktop = isDesktop();
+                if (prevDesktop !== nowDesktop) {
+                    if (nowDesktop) {
+                        // Switching to desktop: remove mobile show classes
+                        sidebar.classList.remove('show');
+                        overlay.classList.remove('show');
+                        // Restore saved desktop state
+                        const saved = localStorage.getItem('sidebarCollapsed');
+                        if (saved === 'true') {
+                            wrapper.classList.add('sidebar-collapsed');
+                            toggleBtn.setAttribute('aria-expanded', 'false');
+                        } else {
+                            wrapper.classList.remove('sidebar-collapsed');
+                            toggleBtn.setAttribute('aria-expanded', 'true');
+                        }
+                    } else {
+                        // Switching to mobile/tablet: remove desktop collapsed class
+                        wrapper.classList.remove('sidebar-collapsed');
+                        sidebar.classList.remove('show');
+                        overlay.classList.remove('show');
+                        toggleBtn.setAttribute('aria-expanded', 'false');
+                    }
+                    prevDesktop = nowDesktop;
+                }
+            });
+        });
+
+        document.addEventListener("DOMContentLoaded", function () {
+            // Initialize Select2 on all form-select elements globally to fix dropdown overlapping issues
+            function formatProductOption(state) {
+                if (!state.id) { return state.text; }
+                var $el = $(state.element);
+                var pid = $el.data('pid');
+                if (!pid) return state.text;
+
+                var name = $el.data('name');
+                var brand = $el.data('brand') || '';
+                var category = $el.data('category') || '';
+                var stock = $el.data('stock');
+
+                return $(
+                    '<div class="py-1 px-1">' +
+                    '  <div class="fw-bold text-dark d-flex align-items-center gap-2"><span class="badge bg-secondary">' + pid + '</span> <span>' + name + '</span></div>' +
+                    '  <div class="text-secondary small mt-1 d-flex gap-3 align-items-center">' +
+                    (brand ? '<span><i class="fa-solid fa-tag"></i> ' + brand + '</span>' : '') +
+                    (category ? '<span><i class="fa-solid fa-layer-group"></i> ' + category + '</span>' : '') +
+                    '    <span class="ms-auto fw-bold ' + (parseInt(stock) > 10 ? 'text-success' : 'text-danger') + '">Stock: ' + stock + '</span>' +
+                    '  </div>' +
+                    '</div>'
+                );
+            }
+
+            function formatProductSelection(state) {
+                if (!state.id) { return state.text; }
+                var $el = $(state.element);
+                var pid = $el.data('pid');
+                if (!pid) return state.text;
+                return pid + " - " + $el.data('name');
+            }
+
+            // Initialize Select2 on all form-select elements globally to fix dropdown overlapping issues
+            $('.form-select').each(function () {
+                let $this = $(this);
+
+                // Skip if Select2 is already initialized (e.g., by DependentFilterManager)
+                if ($this.data('select2') || $this.hasClass('select2-hidden-accessible')) {
+                    return; // already initialized
+                }
+
+                let parentModal = $this.closest('.modal');
+                let select2Config = {
+                    width: '100%',
+                    dropdownAutoWidth: true,
+                    dropdownPosition: 'below'
+                };
+
+                // Check if this is a rich product dropdown
+                if ($this.hasClass('select-product-rich')) {
+                    select2Config.templateResult = formatProductOption;
+                    select2Config.templateSelection = formatProductSelection;
+                    select2Config.escapeMarkup = function (m) { return m; };
+                }
+
+                // If the select is inside a modal, append dropdown to modal to fix focus and z-index issues
+                if (parentModal.length > 0) {
+                    select2Config.dropdownParent = parentModal;
+                }
+
+                $this.select2(select2Config);
+            });
+
+            // If Select2 creates DOM changes, make sure any onchange attributes still trigger
+            $('.form-select').on('select2:select', function (e) {
+                // Trigger native change event for elements that rely on it (like filters)
+                this.dispatchEvent(new Event('change'));
+            });
+        });
+
+        // Global utility function for dependent Product Type -> Category filters
+        function setupDependentCategoryFilter(typeSelectId, categorySelectId, allCatText = 'All Categories', allCatValue = 'All') {
+            const typeSelect = document.getElementById(typeSelectId);
+            const catSelect = document.getElementById(categorySelectId);
+
+            if (!typeSelect || !catSelect) return;
+
+            typeSelect.addEventListener('change', function () {
+                const productType = this.value;
+
+                // Show loading state
+                $(catSelect).empty().append(new Option("Loading categories...", ""));
+                catSelect.disabled = true;
+
+                fetch(`/products/api/categories_by_product_type?product_type=${encodeURIComponent(productType)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        $(catSelect).empty();
+
+                        if (allCatText) {
+                            $(catSelect).append(new Option(allCatText, allCatValue));
+                        }
+
+                        data.categories.forEach(category => {
+                            $(catSelect).append(new Option(category, category));
+                        });
+
+                        catSelect.disabled = false;
+
+                        // Trigger Select2 update and native change event for downstream effects
+                        $(catSelect).trigger('change');
+                        catSelect.dispatchEvent(new Event('change'));
+                    })
+                    .catch(err => {
+                        console.error("Error fetching categories:", err);
+                        $(catSelect).empty().append(new Option(allCatText, allCatValue));
+                        catSelect.disabled = false;
+                        $(catSelect).trigger('change');
+                    });
+            });
+        }
+
+        // Global utility function for dependent Category -> Brand filters
+        function setupDependentBrandFilter(categorySelectId, brandSelectId, allBrandsText = 'All Brands', allBrandsValue = 'All', typeSelectId = null) {
+            const catSelect = document.getElementById(categorySelectId);
+            const brandSelect = document.getElementById(brandSelectId);
+
+            if (!catSelect || !brandSelect) return;
+
+            catSelect.addEventListener('change', function () {
+                const category = this.value;
+                const productType = typeSelectId ? document.getElementById(typeSelectId)?.value || '' : '';
+
+                // Show loading state on brand dropdown
+                $(brandSelect).empty().append(new Option("Loading brands...", ""));
+                brandSelect.disabled = true;
+
+                fetch(`/products/api/brands_by_category?category=${encodeURIComponent(category)}&product_type=${encodeURIComponent(productType)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        $(brandSelect).empty();
+
+                        if (allBrandsText) {
+                            $(brandSelect).append(new Option(allBrandsText, allBrandsValue));
+                        }
+
+                        data.brands.forEach(brand => {
+                            $(brandSelect).append(new Option(brand, brand));
+                        });
+
+                        brandSelect.disabled = false;
+
+                        // Dispatch change event to trigger form submits or chart re-renders
+                        $(brandSelect).trigger('change');
+                        brandSelect.dispatchEvent(new Event('change'));
+                    })
+                    .catch(err => {
+                        console.error("Error fetching brands:", err);
+                        $(brandSelect).empty().append(new Option(allBrandsText, allBrandsValue));
+                        brandSelect.disabled = false;
+                        $(brandSelect).trigger('change');
+                    });
+            });
+        }
+
+        // Animated Counters for KPI Cards
+        document.addEventListener("DOMContentLoaded", function () {
+            const counters = document.querySelectorAll('.animate-counter');
+            const speed = 200; // lower is faster
+
+            counters.forEach(counter => {
+                const targetStr = counter.getAttribute('data-target');
+                if (!targetStr) return;
+
+                const target = parseFloat(targetStr.replace(/,/g, ''));
+                if (isNaN(target)) return;
+
+                const updateCount = () => {
+                    const currentStr = counter.innerText.replace(/,/g, '');
+                    const current = parseFloat(currentStr) || 0;
+                    const inc = target / speed;
+
+                    if (current < target) {
+                        let nextValue = current + inc;
+                        if (Number.isInteger(target)) {
+                            counter.innerText = Math.ceil(nextValue).toLocaleString('en-IN');
+                        } else {
+                            counter.innerText = nextValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        }
+                        setTimeout(updateCount, 15);
+                    } else {
+                        if (Number.isInteger(target)) {
+                            counter.innerText = target.toLocaleString('en-IN');
+                        } else {
+                            counter.innerText = target.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        }
+                    }
+                };
+
+                updateCount();
+            });
+        });
+    </script>
+</body>
+
+</html>

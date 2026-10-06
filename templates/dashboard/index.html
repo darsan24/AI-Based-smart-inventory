@@ -1,0 +1,556 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Smart Inventory AI{% endblock %}
+{% block header_title %}Admin Overview & Analytics{% endblock %}
+
+{% block content %}
+<!-- Top Header & Action Controls -->
+<div class="row g-3 mb-3">
+    <div class="col-12">
+        <div class="card p-3 border-0 shadow-sm">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                <div>
+                    <h4 class="fw-bold text-dark mb-1">
+                        <i class="fa-solid fa-chart-line text-brand me-2"></i> Executive Inventory & Demand Analytics
+                    </h4>
+                    <p class="text-secondary mb-0">Real-time inventory health, sales velocity, and PatchTST demand forecasting telemetry</p>
+                </div>
+                <div class="d-flex gap-3 align-items-center">
+                    <a href="{{ url_for('forecast.index') }}" class="btn btn-brand">
+                        <i class="fa-solid fa-brain me-1"></i> AI Demand Forecast
+                    </a>
+                    <a href="{{ url_for('inventory.reorder_recommendations') }}" class="btn btn-secondary-custom">
+                        <i class="fa-solid fa-truck-fast me-1 text-secondary"></i> Reorder Plan
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Metric Cards Row -->
+<div class="row g-3 mb-4">
+    <!-- Total Products -->
+    <div class="col-12 col-md-6 col-lg-4 col-xl-2">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="stat-label">Total Catalog</div>
+                    <div class="stat-value text-dark animate-counter" data-target="{{ total_products }}">{{ total_products }}</div>
+                    <div class="stat-subtext text-secondary">products</div>
+                </div>
+                <div class="icon-box icon-brand">
+                    <i class="fa-solid fa-box"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Current Inventory Units -->
+    <div class="col-12 col-md-6 col-lg-4 col-xl-2">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="stat-label">Inventory Units</div>
+                    <div class="stat-value text-dark"><span class="animate-counter" data-target="{{ current_inventory }}">{{ current_inventory }}</span></div>
+                    <div class="stat-subtext text-secondary">in stock</div>
+                </div>
+                <div class="icon-box icon-green">
+                    <i class="fa-solid fa-warehouse"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Low Stock Alert (Conditional Styling: Alert only when > 0) -->
+    <div class="col-12 col-md-6 col-lg-4 col-xl-2">
+        <a href="{{ url_for('inventory.index', filter='low_stock') }}" class="text-decoration-none h-100 d-block">
+            <div class="stat-card" {% if low_stock_count > 0 %}style="border-left: 3px solid var(--danger-text) !important;"{% endif %}>
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="stat-label {% if low_stock_count > 0 %}text-danger{% else %}text-secondary{% endif %}">Low Stock Alert</div>
+                        <div class="stat-value" {% if low_stock_count > 0 %}style="color: var(--danger-text);"{% endif %}><span class="animate-counter" data-target="{{ low_stock_count }}">{{ low_stock_count }}</span></div>
+                        <div class="stat-subtext text-secondary">{% if low_stock_count > 0 %}needs restock{% else %}all healthy{% endif %}</div>
+                    </div>
+                    <div class="icon-box {% if low_stock_count > 0 %}icon-red{% else %}icon-green{% endif %}">
+                        <i class="fa-solid {% if low_stock_count > 0 %}fa-triangle-exclamation{% else %}fa-circle-check{% endif %}"></i>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Reorder Soon (Conditional Styling: Alert only when > 0) -->
+    <div class="col-12 col-md-6 col-lg-4 col-xl-2">
+        <a href="{{ url_for('inventory.reorder_recommendations') }}" class="text-decoration-none h-100 d-block">
+            <div class="stat-card" {% if reorder_soon_count > 0 %}style="border-left: 3px solid var(--warning-text) !important;"{% endif %}>
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="stat-label" {% if reorder_soon_count > 0 %}style="color: var(--warning-text);"{% endif %}>Reorder Soon</div>
+                        <div class="stat-value" {% if reorder_soon_count > 0 %}style="color: var(--warning-text);"{% endif %}><span class="animate-counter" data-target="{{ reorder_soon_count }}">{{ reorder_soon_count }}</span></div>
+                        <div class="stat-subtext text-secondary">{% if reorder_soon_count > 0 %}recommendations{% else %}optimal levels{% endif %}</div>
+                    </div>
+                    <div class="icon-box {% if reorder_soon_count > 0 %}icon-amber{% else %}icon-green{% endif %}">
+                        <i class="fa-solid {% if reorder_soon_count > 0 %}fa-truck-fast{% else %}fa-circle-check{% endif %}"></i>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Total Sales Revenue (Rupees) -->
+    <div class="col-12 col-md-6 col-lg-4 col-xl-2">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="stat-label">Sales Revenue</div>
+                    <div class="stat-value text-dark" style="font-size: 22px;">₹<span class="animate-counter" data-target="{{ total_sales }}">{{ "{:,.0f}".format(total_sales) }}</span></div>
+                    <div class="stat-subtext text-secondary">total volume</div>
+                </div>
+                <div class="icon-box icon-brand">
+                    <i class="fa-solid fa-indian-rupee-sign"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Accuracy Advantage vs Baseline -->
+    <div class="col-12 col-md-6 col-lg-4 col-xl-2">
+        <a href="{{ url_for('forecast.index') }}" class="text-decoration-none h-100 d-block">
+            <div class="stat-card" style="border-left: 3px solid var(--brand) !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="stat-label text-brand">AI Accuracy Edge</div>
+                        <div class="stat-value text-brand" style="font-size: 22px;">
+                            {% if baseline_summary and baseline_summary.average_improvement_percent %}
+                                +<span class="animate-counter" data-target="{{ baseline_summary.average_improvement_percent }}">{{ baseline_summary.average_improvement_percent }}</span>%
+                            {% else %}
+                                <span>--</span>
+                            {% endif %}
+                        </div>
+                        <div class="stat-subtext text-secondary">vs 14d baseline</div>
+                    </div>
+                    <div class="icon-box icon-brand">
+                        <i class="fa-solid fa-chart-line"></i>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- Stock Health Notification Banner (Conditional: Calm/Positive when 0, Warning when > 0) -->
+{% set total_health_alerts = (low_stock_count or 0) + (out_of_stock_count or 0) + (immediate_reorder_count or 0) %}
+{% if total_health_alerts > 0 %}
+<div class="card p-3 mb-4 border-0" style="background-color: var(--warning-bg); border: 1px solid var(--warning-border) !important;">
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div class="icon-box bg-white shadow-xs" style="color: var(--warning-text);">
+                <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <div>
+                <h6 class="fw-bold mb-1" style="color: var(--warning-text);">Inventory Health Notice</h6>
+                <div class="d-flex flex-wrap gap-3 text-secondary small">
+                    {% if low_stock_count > 0 %}
+                    <span><strong style="color: var(--warning-text);"><i class="fa-solid fa-triangle-exclamation me-1"></i> Low Stock:</strong> {{ low_stock_count }} items</span>
+                    {% endif %}
+                    {% if out_of_stock_count > 0 %}
+                    <span class="border-start ps-3" style="border-color: var(--warning-border);"><strong style="color: var(--danger-text);"><i class="fa-solid fa-ban me-1"></i> Out of Stock:</strong> {{ out_of_stock_count }} items</span>
+                    {% endif %}
+                    {% if immediate_reorder_count > 0 %}
+                    <span class="border-start ps-3" style="border-color: var(--warning-border);"><strong class="text-dark"><i class="fa-solid fa-truck-ramp-box me-1"></i> Immediate Restock:</strong> {{ immediate_reorder_count }} items</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <a href="{{ url_for('inventory.index', filter='low_stock') }}" class="btn btn-secondary-custom btn-sm text-nowrap">
+            <i class="fa-solid fa-warehouse me-1"></i> Manage Stock
+        </a>
+    </div>
+</div>
+{% else %}
+<div class="card p-3 mb-4 border-0" style="background-color: var(--success-bg); border: 1px solid var(--success-border) !important;">
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div class="icon-box bg-white shadow-xs" style="color: var(--success-text);">
+                <i class="fa-solid fa-circle-check"></i>
+            </div>
+            <div>
+                <h6 class="fw-bold mb-1" style="color: var(--success-text);">Inventory Status: All Healthy</h6>
+                <div class="text-secondary small">
+                    All {{ total_products }} products are currently well-stocked above reorder thresholds. No immediate restocks needed.
+                </div>
+            </div>
+        </div>
+        <a href="{{ url_for('inventory.index') }}" class="btn btn-secondary-custom btn-sm text-nowrap">
+            <i class="fa-solid fa-warehouse me-1"></i> View Catalog
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<!-- Charts Row -->
+<div class="row g-4 mb-4">
+    <!-- Sales Trend Chart -->
+    <div class="col-12 col-lg-8">
+        <div class="card p-4 h-100 border-0 shadow-sm">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h5 class="fw-bold text-dark mb-0"><i class="fa-solid fa-chart-line text-brand me-2"></i> Sales Revenue Trend (Recent 14 Days)</h5>
+                <span class="badge-soft-neutral">INR (₹)</span>
+            </div>
+            <div style="position: relative; height: 290px;">
+                <canvas id="salesTrendChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inventory Product-wise Breakdown -->
+    <div class="col-12 col-lg-4">
+        <div class="card p-4 h-100 border-0 shadow-sm">
+            <h5 class="fw-bold text-dark mb-3"><i class="fa-solid fa-chart-pie text-brand me-2"></i> Stock by Product Type</h5>
+            <div style="position: relative; height: 290px;" class="d-flex align-items-center justify-content-center">
+                <canvas id="productStockChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ABC / XYZ Inventory Classification 9-Box Matrix Row -->
+{% if classification_summary and classification_summary.total_products > 0 %}
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card p-4 border-0 shadow-sm">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+                <div>
+                    <h5 class="fw-bold text-dark mb-1">
+                        <i class="fa-solid fa-cubes-stacked text-brand me-2"></i> ABC / XYZ Demand & Revenue Matrix (9-Box Grid)
+                    </h5>
+                    <p class="text-secondary small mb-0">ABC = Revenue Impact (80/20 Rule) | XYZ = Demand Predictability & Variability (CV)</p>
+                </div>
+                <a href="{{ url_for('products.list_products') }}" class="btn btn-secondary-custom btn-sm">
+                    <i class="fa-solid fa-list me-1"></i> View Full Segmented Catalog
+                </a>
+            </div>
+
+            <!-- 9-Box Grid Layout -->
+            <div class="row g-3">
+                <!-- Class A (High Revenue) -->
+                <div class="col-12 col-md-4">
+                    <div class="p-3 bg-subtle rounded border h-100" style="background-color: var(--bg-subtle);">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="eyebrow-label text-success">Class A (Top 80% Rev)</span>
+                            <span class="badge-soft-success">{{ classification_summary.abc_totals.A }} products</span>
+                        </div>
+                        <div class="d-flex flex-column gap-2">
+                            <a href="{{ url_for('products.list_products', combined_class='AX') }}" class="text-decoration-none">
+                                <div class="d-flex justify-content-between align-items-center p-2 rounded bg-white border">
+                                    <span class="text-dark"><strong>AX</strong> <small class="text-secondary">(High Rev, Steady Demand)</small></span>
+                                    <span class="badge-soft-success">{{ classification_summary.matrix.AX }}</span>
+                                </div>
+                            </a>
+                            <a href="{{ url_for('products.list_products', combined_class='AY') }}" class="text-decoration-none">
+                                <div class="d-flex justify-content-between align-items-center p-2 rounded bg-white border">
+                                    <span class="text-dark"><strong>AY</strong> <small class="text-secondary">(High Rev, Variable Demand)</small></span>
+                                    <span class="badge-soft-warning">{{ classification_summary.matrix.AY }}</span>
+                                </div>
+                            </a>
+                            <a href="{{ url_for('products.list_products', combined_class='AZ') }}" class="text-decoration-none">
+                                <div class="d-flex justify-content-between align-items-center p-2 rounded bg-white border">
+                                    <span class="text-dark"><strong>AZ</strong> <small class="text-secondary">(High Rev, Erratic Demand)</small></span>
+                                    <span class="badge-soft-danger">{{ classification_summary.matrix.AZ }}</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Class B (Moderate Revenue) -->
+                <div class="col-12 col-md-4">
+                    <div class="p-3 bg-subtle rounded border h-100" style="background-color: var(--bg-subtle);">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="eyebrow-label text-brand">Class B (Next 15% Rev)</span>
+                            <span class="badge-soft-brand">{{ classification_summary.abc_totals.B }} products</span>
+                        </div>
+                        <div class="d-flex flex-column gap-2">
+                            <a href="{{ url_for('products.list_products', combined_class='BX') }}" class="text-decoration-none">
+                                <div class="d-flex justify-content-between align-items-center p-2 rounded bg-white border">
+                                    <span class="text-dark"><strong>BX</strong> <small class="text-secondary">(Mid Rev, Steady Demand)</small></span>
+                                    <span class="badge-soft-success">{{ classification_summary.matrix.BX }}</span>
+                                </div>
+                            </a>
+                            <a href="{{ url_for('products.list_products', combined_class='BY') }}" class="text-decoration-none">
+                                <div class="d-flex justify-content-between align-items-center p-2 rounded bg-white border">
+                                    <span class="text-dark"><strong>BY</strong> <small class="text-secondary">(Mid Rev, Variable Demand)</small></span>
+                                    <span class="badge-soft-warning">{{ classification_summary.matrix.BY }}</span>
+                                </div>
+                            </a>
+                            <a href="{{ url_for('products.list_products', combined_class='BZ') }}" class="text-decoration-none">
+                                <div class="d-flex justify-content-between align-items-center p-2 rounded bg-white border">
+                                    <span class="text-dark"><strong>BZ</strong> <small class="text-secondary">(Mid Rev, Erratic Demand)</small></span>
+                                    <span class="badge-soft-danger">{{ classification_summary.matrix.BZ }}</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Class C (Low Revenue) -->
+                <div class="col-12 col-md-4">
+                    <div class="p-3 bg-subtle rounded border h-100" style="background-color: var(--bg-subtle);">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="eyebrow-label">Class C (Bottom 5% Rev)</span>
+                            <span class="badge-soft-neutral">{{ classification_summary.abc_totals.C }} products</span>
+                        </div>
+                        <div class="d-flex flex-column gap-2">
+                            <a href="{{ url_for('products.list_products', combined_class='CX') }}" class="text-decoration-none">
+                                <div class="d-flex justify-content-between align-items-center p-2 rounded bg-white border">
+                                    <span class="text-dark"><strong>CX</strong> <small class="text-secondary">(Low Rev, Steady Demand)</small></span>
+                                    <span class="badge-soft-success">{{ classification_summary.matrix.CX }}</span>
+                                </div>
+                            </a>
+                            <a href="{{ url_for('products.list_products', combined_class='CY') }}" class="text-decoration-none">
+                                <div class="d-flex justify-content-between align-items-center p-2 rounded bg-white border">
+                                    <span class="text-dark"><strong>CY</strong> <small class="text-secondary">(Low Rev, Variable Demand)</small></span>
+                                    <span class="badge-soft-warning">{{ classification_summary.matrix.CY }}</span>
+                                </div>
+                            </a>
+                            <a href="{{ url_for('products.list_products', combined_class='CZ') }}" class="text-decoration-none">
+                                <div class="d-flex justify-content-between align-items-center p-2 rounded bg-white border">
+                                    <span class="text-dark"><strong>CZ</strong> <small class="text-secondary">(Low Rev, Erratic Demand)</small></span>
+                                    <span class="badge-soft-danger">{{ classification_summary.matrix.CZ }}</span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Reorder Recommendations & Activity Log Row -->
+<div class="row g-4 mb-4">
+    <!-- Smart Reorder Recommendation Engine -->
+    <div class="col-12 col-xl-8">
+        <div class="card p-4 border-0 shadow-sm h-100">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <div>
+                    <h5 class="fw-bold text-dark mb-0">
+                        <i class="fa-solid fa-wand-magic-sparkles text-brand me-2"></i> AI Reorder Recommendations
+                    </h5>
+                    <p class="text-secondary small mb-0 mt-1">Based on PatchTST forecasted demand & dynamic stock thresholds</p>
+                </div>
+                <a href="{{ url_for('inventory.reorder_recommendations') }}" class="btn btn-secondary-custom btn-sm">
+                    View All ({{ reorder_soon_count }})
+                </a>
+            </div>
+
+            {% if reorder_recommendations %}
+            <div class="table-custom-wrapper mt-3">
+                <div class="table-responsive">
+                    <table class="table table-custom mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Stock</th>
+                                <th>15d Demand</th>
+                                <th>Rec. Order</th>
+                                <th>Urgency</th>
+                                <th class="text-end">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rec in reorder_recommendations %}
+                            <tr>
+                                <td>
+                                    <div class="fw-bold text-dark">{{ rec.product.name }}</div>
+                                    <small class="text-secondary">{{ rec.product.product_id_str }}</small>
+                                </td>
+                                <td>
+                                    <span class="fw-semibold text-dark tabular-nums">{{ rec.current_stock }}</span>
+                                    <small class="text-secondary">/ {{ rec.reorder_level }}</small>
+                                </td>
+                                <td>
+                                    <span class="fw-semibold text-dark tabular-nums">{{ "%.0f"|format(rec.predicted_demand_15d) }}</span>
+                                    <small class="text-secondary">units</small>
+                                </td>
+                                <td>
+                                    {% if rec.recommended_qty > 0 %}
+                                        <span class="fw-bold text-brand tabular-nums">+{{ rec.recommended_qty }} units</span>
+                                    {% else %}
+                                        <span class="text-secondary">Sufficient</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if rec.urgency == 'CRITICAL' %}
+                                        <span class="badge-soft-danger"><i class="fa-solid fa-circle-exclamation me-1"></i> Critical</span>
+                                    {% elif rec.urgency == 'HIGH' or rec.urgency == 'Soon' %}
+                                        <span class="badge-soft-warning"><i class="fa-solid fa-clock me-1"></i> Soon</span>
+                                    {% else %}
+                                        <span class="badge-soft-success"><i class="fa-solid fa-check me-1"></i> Normal</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <a href="{{ url_for('inventory.index') }}" class="btn btn-secondary-custom btn-sm">
+                                        Restock
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% else %}
+            <div class="text-center text-secondary py-5">
+                <i class="fa-solid fa-circle-check fs-2 text-success mb-2"></i>
+                <div class="fw-semibold text-dark">All inventory levels are healthy</div>
+                <div class="small">No immediate reorders required based on current AI forecasts.</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Recent Inventory Activities -->
+    <div class="col-12 col-xl-4">
+        <div class="card p-4 border-0 shadow-sm h-100">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h5 class="fw-bold text-dark mb-0"><i class="fa-solid fa-clock-rotate-left me-2 text-brand"></i> Stock Activity</h5>
+                <a href="{{ url_for('inventory.history') }}" class="btn btn-link text-brand text-decoration-none fw-semibold p-0 small">View History</a>
+            </div>
+
+            <div class="list-group list-group-flush mt-2">
+                {% for act in recent_activities %}
+                <div class="list-group-item bg-transparent text-dark border-bottom px-0 py-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="fw-semibold text-dark">{{ act.product.name if act.product else 'N/A' }}</div>
+                            <div class="text-secondary small mt-1">{{ act.notes }}</div>
+                        </div>
+                        <div class="text-end">
+                            {% if act.transaction_type == 'Stock In' %}
+                                <span class="badge-soft-success">+{{ act.quantity }} In</span>
+                            {% elif act.transaction_type == 'Stock Out' %}
+                                <span class="badge-soft-danger">-{{ act.quantity }} Out</span>
+                            {% else %}
+                                <span class="badge-soft-neutral">{{ act.transaction_type }}</span>
+                            {% endif %}
+                            <div class="text-secondary small mt-1">{{ act.created_at.strftime('%d %b, %H:%M') if act.created_at else '' }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center text-secondary py-4 small">No recent activity recorded.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // 1. Sales Trend Chart (INR Rupee)
+    const trendCtx = document.getElementById('salesTrendChart').getContext('2d');
+    let gradient = createPremiumGradient(trendCtx, 'rgba(124, 58, 237, 0.25)', 'rgba(124, 58, 237, 0.0)', 300);
+
+    new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: {{ trend_dates | tojson }},
+            datasets: [{
+                label: 'Sales Revenue (₹)',
+                data: {{ trend_values | tojson }},
+                borderColor: '#7C3AED',
+                backgroundColor: gradient,
+                borderWidth: 2.5,
+                fill: true,
+                tension: 0.35,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                pointBackgroundColor: '#7C3AED',
+                pointBorderColor: '#ffffff',
+                pointBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { 
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const val = (context.parsed && context.parsed.y !== undefined) ? context.parsed.y : context.raw;
+                            return ' Sales Revenue: ' + formatIndianCurrency(val);
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { 
+                    grid: { color: '#F3F4F6', drawBorder: false }, 
+                    ticks: { color: '#374151', font: {family: 'Inter', size: 12} } 
+                },
+                y: { 
+                    grid: { color: '#F3F4F6', drawBorder: false }, 
+                    ticks: { 
+                        color: '#374151',
+                        font: {family: 'Inter', size: 12},
+                        callback: function(value) { return formatIndianCurrency(value); }
+                    } 
+                }
+            }
+        }
+    });
+
+    // 2. Product Type Inventory Breakdown Chart
+    const productCtx = document.getElementById('productStockChart').getContext('2d');
+    new Chart(productCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ product_labels | tojson }},
+            datasets: [{
+                data: {{ product_values | tojson }},
+                backgroundColor: [
+                    '#7C3AED', '#2563EB', '#059669', '#D97706', '#DC2626',
+                    '#4F46E5', '#0891B2', '#16A34A', '#CA8A04', '#9333EA'
+                ],
+                borderWidth: 2,
+                borderColor: '#ffffff',
+                hoverOffset: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '68%',
+            plugins: {
+                legend: { 
+                    position: 'bottom', 
+                    labels: { 
+                        color: '#374151', 
+                        boxWidth: 14, 
+                        boxHeight: 14,
+                        useBorderRadius: true,
+                        borderRadius: 3,
+                        padding: 16, 
+                        font: { family: 'Inter', size: 12, weight: '500' } 
+                    } 
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.raw || 0;
+                            return ' Total Stock: ' + value.toLocaleString() + ' units';
+                        }
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

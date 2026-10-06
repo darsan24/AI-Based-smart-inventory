@@ -1,0 +1,50 @@
+# Python Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+env.bak/
+venv.bak/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+
+# Local Environment Variables & Secrets
+.env
+.env.local
+
+# SQLite Database
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# AI Model checkpoints and weights
+ai/saved_models/*
+!ai/saved_models/.gitkeep
+
+# User Uploaded files (keep directory)
+static/uploads/*
+!static/uploads/.gitkeep
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.gemini/
+
+# Operating System Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# Logs
+*.log

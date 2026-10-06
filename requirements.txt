@@ -1,0 +1,13 @@
+Flask==3.0.3
+Flask-SQLAlchemy==3.1.1
+Werkzeug==3.0.3
+PyMySQL==1.1.1
+cryptography==42.0.8
+pandas==2.2.2
+numpy==1.26.4
+torch==2.3.1
+shap==0.45.1
+scikit-learn==1.5.0
+matplotlib==3.9.0
+python-dotenv==1.0.1
+fpdf2==2.8.7

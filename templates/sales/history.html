@@ -1,0 +1,738 @@
+{% extends "base.html" %}
+
+{% block title %}Sales History - Smart Inventory AI{% endblock %}
+{% block header_title %}Sales History{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ──── Sales History — Clean Enterprise Styles ──── */
+    .filter-toolbar {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border: 1px solid #CBD5E1;
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .date-preset-btn {
+        border: 1px solid #CBD5E1;
+        background: white;
+        color: #374151;
+        font-size: 0.8rem;
+        font-weight: 600;
+        padding: 6px 14px;
+        border-radius: 20px;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    .date-preset-btn:hover {
+        background: #e0f2fe;
+        border-color: #38bdf8;
+        color: #0284c7;
+    }
+    .date-preset-btn.active {
+        background: linear-gradient(135deg, #0ea5e9, #0284c7);
+        color: white;
+        border-color: transparent;
+        box-shadow: 0 2px 8px rgba(14, 165, 233, 0.35);
+    }
+    .filter-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #374151;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+    }
+    .custom-date-group {
+        display: none;
+        gap: 8px;
+        align-items: flex-end;
+    }
+    .custom-date-group.show { display: flex; }
+    .filter-input {
+        border: 1px solid #CBD5E1;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 0.85rem;
+        color: #111827;
+        transition: border-color 0.2s;
+    }
+    .filter-input:focus {
+        border-color: #0ea5e9;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+    }
+    .export-btn {
+        border: 1px solid #CBD5E1;
+        background: white;
+        color: #374151;
+        font-size: 0.8rem;
+        font-weight: 600;
+        padding: 6px 14px;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+    .export-btn:hover {
+        background: #f1f5f9;
+        border-color: #64748b;
+    }
+    .export-btn i { margin-right: 4px; }
+    .sales-table th {
+        background: #f8fafc;
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #374151;
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+        padding: 12px 16px;
+        border-bottom: 2px solid #CBD5E1;
+    }
+    .sales-table th:hover { color: #0284c7; }
+    .sales-table th .sort-icon { margin-left: 4px; font-size: 0.7rem; opacity: 0.7; }
+    .sales-table th.sort-active .sort-icon { opacity: 1; color: #0284c7; }
+    .sales-table td { padding: 10px 16px; font-size: 0.875rem; vertical-align: middle; }
+    .sales-table tbody tr { transition: background 0.15s ease; }
+    .sales-table tbody tr:hover { background: #f0f9ff; }
+    .pagination-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 0;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .page-btn {
+        border: 1px solid #CBD5E1;
+        background: white;
+        color: #374151;
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .page-btn:hover { background: #f1f5f9; }
+    .page-btn.active { background: #0284c7; color: white; border-color: transparent; }
+    .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .loading-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(255,255,255,0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 16px;
+        z-index: 10;
+    }
+    .badge-count {
+        font-size: 0.7rem;
+        background: #374151;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 10px;
+        margin-left: 4px;
+    }
+    @media (max-width: 768px) {
+        .filter-toolbar { padding: 14px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="salesHistoryApp">
+
+    <!-- ══════════ FILTER TOOLBAR ══════════ -->
+    <div class="filter-toolbar">
+        <!-- Row 1: Date Presets -->
+        <div class="mb-3">
+            <div class="filter-label mb-2"><i class="fa-regular fa-calendar me-1"></i> Date Range</div>
+            <div class="d-flex flex-wrap gap-2" id="datePresetBtns">
+                <button class="date-preset-btn" data-preset="today">Today</button>
+                <button class="date-preset-btn" data-preset="yesterday">Yesterday</button>
+                <button class="date-preset-btn" data-preset="last7">Last 7 Days</button>
+                <button class="date-preset-btn" data-preset="last30">Last 30 Days</button>
+                <button class="date-preset-btn" data-preset="this_month">This Month</button>
+                <button class="date-preset-btn" data-preset="last_month">Last Month</button>
+                <button class="date-preset-btn" data-preset="this_year">This Year</button>
+                <button class="date-preset-btn" data-preset="custom" id="customDateToggle">
+                    <i class="fa-solid fa-calendar-days me-1"></i>Custom Range
+                </button>
+                <button class="date-preset-btn" data-preset="" id="clearDateBtn" title="Clear date filter">
+                    <i class="fa-solid fa-xmark"></i> All Time
+                </button>
+            </div>
+            <!-- Custom Date Range -->
+            <div class="custom-date-group mt-2 flex-wrap" id="customDateGroup">
+                <div>
+                    <div class="filter-label">From</div>
+                    <input type="date" class="filter-input" id="dateFrom">
+                </div>
+                <div>
+                    <div class="filter-label">To</div>
+                    <input type="date" class="filter-input" id="dateTo">
+                </div>
+                <button class="btn btn-sm btn-primary rounded-pill px-3 fw-bold" id="applyCustomDate" style="height:34px;">
+                    <i class="fa-solid fa-check me-1"></i>Apply
+                </button>
+            </div>
+        </div>
+
+        <!-- Row 2: Dropdown Filters -->
+        <div class="row g-2 mb-2">
+            <div class="col-6 col-md-3 col-lg-2">
+                <div class="filter-label">Product Type</div>
+                <select class="filter-input w-100" id="filterProductType" style="height:34px;">
+                    <option value="">All Types</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-3 col-lg-2">
+                <div class="filter-label">Category</div>
+                <select class="filter-input w-100" id="filterCategory" style="height:34px;">
+                    <option value="">All Categories</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-3 col-lg-2">
+                <div class="filter-label">Brand</div>
+                <select class="filter-input w-100" id="filterBrand" style="height:34px;">
+                    <option value="">All Brands</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-3 col-lg-2">
+                <div class="filter-label">Product Name</div>
+                <input type="text" class="filter-input w-100" id="filterProductName" placeholder="e.g. Dell..." style="height:34px;">
+            </div>
+            <div class="col-6 col-md-3 col-lg-1">
+                <div class="filter-label">Min ₹</div>
+                <input type="number" class="filter-input w-100" id="filterMinAmount" placeholder="0" style="height:34px;">
+            </div>
+            <div class="col-6 col-md-3 col-lg-1">
+                <div class="filter-label">Max ₹</div>
+                <input type="number" class="filter-input w-100" id="filterMaxAmount" placeholder="∞" style="height:34px;">
+            </div>
+            <div class="col-12 col-lg-2">
+                <div class="filter-label"><i class="fa-solid fa-search me-1"></i>Search</div>
+                <input type="text" class="filter-input w-100" id="filterSearch" placeholder="Sale ID, Product, Brand..." style="height:34px;">
+            </div>
+        </div>
+
+        <!-- Row 3: Active Filters & Clear -->
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-2">
+            <div id="activeFiltersBar" class="d-flex flex-wrap gap-1" style="font-size:0.8rem;"></div>
+            <button class="btn btn-sm btn-outline-danger rounded-pill fw-bold px-3" id="clearAllFilters" style="font-size:0.78rem;">
+                <i class="fa-solid fa-filter-circle-xmark me-1"></i>Clear All Filters
+            </button>
+        </div>
+    </div>
+
+    <!-- ══════════ SALES HISTORY TABLE ══════════ -->
+    <div class="card border-0 shadow-sm" style="border-radius:16px; overflow:hidden;">
+        <div class="card-header bg-white py-3 px-4 d-flex align-items-center justify-content-between flex-wrap gap-2 border-bottom">
+            <div class="d-flex align-items-center gap-2">
+                <h5 class="fw-bold text-dark mb-0"><i class="fa-solid fa-receipt text-primary me-2"></i>Sales History</h5>
+                <span class="badge-count" id="totalCountBadge">0</span>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="export-btn" id="exportCSV"><i class="fa-solid fa-file-csv text-success"></i>CSV</button>
+                <button class="export-btn" id="exportExcel"><i class="fa-solid fa-file-excel text-success"></i>Excel</button>
+                <button class="export-btn" id="exportPDF"><i class="fa-solid fa-file-pdf text-danger"></i>PDF</button>
+                <button class="export-btn" id="exportPrint"><i class="fa-solid fa-print text-primary"></i>Print</button>
+                <a href="{{ url_for('sales.upload_csv') }}" class="export-btn text-decoration-none">
+                    <i class="fa-solid fa-file-upload text-info"></i>Upload CSV
+                </a>
+            </div>
+        </div>
+        <div class="card-body p-0 position-relative">
+            <div id="tableLoading" class="loading-overlay d-none">
+                <div class="spinner-border text-primary" role="status"></div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover sales-table mb-0">
+                    <thead>
+                        <tr>
+                            <th data-sort="id" class="sort-active">Sale ID <i class="fa-solid fa-sort sort-icon"></i></th>
+                            <th data-sort="sale_date">Date <i class="fa-solid fa-sort sort-icon"></i></th>
+                            <th data-sort="product">Product <i class="fa-solid fa-sort sort-icon"></i></th>
+                            <th>Type</th>
+                            <th>Category</th>
+                            <th data-sort="brand">Brand <i class="fa-solid fa-sort sort-icon"></i></th>
+                            <th data-sort="quantity" class="text-center">Qty <i class="fa-solid fa-sort sort-icon"></i></th>
+                            <th data-sort="unit_price" class="text-end">Unit Price (₹) <i class="fa-solid fa-sort sort-icon"></i></th>
+                            <th data-sort="amount" class="text-end">Total Amount (₹) <i class="fa-solid fa-sort sort-icon"></i></th>
+                        </tr>
+                    </thead>
+                    <tbody id="salesTableBody">
+                        <tr><td colspan="9" class="text-center text-secondary py-5">
+                            <div class="spinner-border spinner-border-sm text-primary me-2"></div> Loading sales data...
+                        </td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-white border-top px-4">
+            <div class="pagination-controls">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-secondary small fw-bold">Rows:</span>
+                    <select class="filter-input" id="perPageSelect" style="width:70px; height:34px; font-size:0.85rem;">
+                        <option value="10">10</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-secondary small" id="paginationInfo">Showing 0 - 0 of 0</span>
+                </div>
+                <div class="d-flex gap-1" id="paginationBtns"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- jsPDF for PDF export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<!-- SheetJS for Excel export -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+
+<script>
+(function() {
+    'use strict';
+
+    // ──── STATE ────
+    const state = {
+        datePreset: '',
+        dateFrom: '',
+        dateTo: '',
+        productType: '',
+        category: '',
+        brand: '',
+        productName: '',
+        minAmount: '',
+        maxAmount: '',
+        search: '',
+        sortBy: 'sale_date',
+        sortDir: 'desc',
+        page: 1,
+        perPage: 25
+    };
+
+    // ──── DOM REFS ────
+    const $ = id => document.getElementById(id);
+    const tbody = $('salesTableBody');
+    const tableLoading = $('tableLoading');
+
+    // ──── UTILITY ────
+    function formatCurrency(val) {
+        return '₹' + Number(val).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    function formatDate(dateStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr + 'T00:00:00');
+        return d.toLocaleDateString('en-IN', {day: '2-digit', month: 'short', year: 'numeric'});
+    }
+    function buildQueryString() {
+        const params = new URLSearchParams();
+        if (state.datePreset && state.datePreset !== 'custom') params.append('date_preset', state.datePreset);
+        if (state.dateFrom) params.append('date_from', state.dateFrom);
+        if (state.dateTo) params.append('date_to', state.dateTo);
+        if (state.productType) params.append('product_type', state.productType);
+        if (state.category) params.append('category', state.category);
+        if (state.brand) params.append('brand', state.brand);
+        if (state.productName) params.append('product_name', state.productName);
+        if (state.minAmount) params.append('min_amount', state.minAmount);
+        if (state.maxAmount) params.append('max_amount', state.maxAmount);
+        if (state.search) params.append('search', state.search);
+        return params.toString();
+    }
+
+    // ──── FETCH FUNCTIONS ────
+    function fetchData() {
+        tableLoading.classList.remove('d-none');
+        const qs = buildQueryString();
+        const url = `/sales/api/data?${qs}&sort_by=${state.sortBy}&sort_dir=${state.sortDir}&page=${state.page}&per_page=${state.perPage}`;
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                renderTable(data);
+                renderPagination(data);
+                tableLoading.classList.add('d-none');
+            })
+            .catch(err => {
+                console.error('Fetch data error:', err);
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-4">Error loading data.</td></tr>';
+                tableLoading.classList.add('d-none');
+            });
+    }
+
+    function fetchFilters() {
+        // Initialized by DependentFilterManager, but we can do a refresh if needed
+        // For Sales History, we use the global JS utility now
+    }
+
+    function refreshAll() {
+        fetchData();
+        updateActiveFiltersBar();
+    }
+
+    // ──── RENDER TABLE ────
+    function renderTable(response) {
+        const {data, total_count} = response;
+        $('totalCountBadge').textContent = total_count.toLocaleString();
+
+        if (!data || data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" class="text-center text-secondary py-5">
+                <i class="fa-solid fa-receipt fs-2 mb-3 text-muted d-block"></i>
+                <div class="fw-semibold">No sales records found matching your filters.</div>
+            </td></tr>`;
+            return;
+        }
+
+        let html = '';
+        data.forEach(s => {
+            const unitPrice = s.quantity_sold > 0 ? (s.total_price / s.quantity_sold) : 0;
+            html += `<tr>
+                <td><span class="text-secondary fw-semibold">#${s.id}</span></td>
+                <td><span class="text-dark fw-semibold"><i class="fa-regular fa-calendar text-muted me-1"></i>${formatDate(s.sale_date)}</span></td>
+                <td>
+                    <div class="fw-bold text-dark">${escHtml(s.product_name)}</div>
+                    <span class="badge bg-light text-secondary border mt-1" style="font-size:0.7rem;">${s.product_id_str}</span>
+                </td>
+                <td><span class="badge bg-light text-secondary border">${escHtml(s.product_type)}</span></td>
+                <td class="text-tertiary small fw-medium">${escHtml(s.category)}</td>
+                <td><span class="fw-semibold text-dark">${escHtml(s.brand)}</span></td>
+                <td class="text-center"><span class="fw-bold text-dark">${s.quantity_sold}</span> <span class="text-tertiary small">units</span></td>
+                <td class="text-end"><span class="fw-semibold text-dark">${formatCurrency(unitPrice)}</span></td>
+                <td class="text-end"><span class="fw-bold text-success">${formatCurrency(s.total_price)}</span></td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+    }
+
+    function escHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
+    }
+
+    // ──── RENDER PAGINATION ────
+    function renderPagination(response) {
+        const {total_count, page, per_page, total_pages} = response;
+        const start = total_count > 0 ? (page - 1) * per_page + 1 : 0;
+        const end = Math.min(page * per_page, total_count);
+        $('paginationInfo').textContent = `Showing ${start} – ${end} of ${total_count}`;
+
+        const container = $('paginationBtns');
+        container.innerHTML = '';
+
+        if (total_pages <= 1) return;
+
+        // Prev
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'page-btn';
+        prevBtn.innerHTML = '<i class="fa-solid fa-chevron-left" style="font-size:0.7rem;"></i>';
+        prevBtn.disabled = page <= 1;
+        prevBtn.onclick = () => { state.page = page - 1; fetchData(); };
+        container.appendChild(prevBtn);
+
+        // Page numbers (max 7)
+        let startPage = Math.max(1, page - 3);
+        let endPage = Math.min(total_pages, startPage + 6);
+        if (endPage - startPage < 6) startPage = Math.max(1, endPage - 6);
+
+        for (let i = startPage; i <= endPage; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'page-btn' + (i === page ? ' active' : '');
+            btn.textContent = i;
+            btn.onclick = () => { state.page = i; fetchData(); };
+            container.appendChild(btn);
+        }
+
+        // Next
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'page-btn';
+        nextBtn.innerHTML = '<i class="fa-solid fa-chevron-right" style="font-size:0.7rem;"></i>';
+        nextBtn.disabled = page >= total_pages;
+        nextBtn.onclick = () => { state.page = page + 1; fetchData(); };
+        container.appendChild(nextBtn);
+    }
+
+    // ──── POPULATE FILTERS (Handled by Manager) ────
+    // Replaced by DependentFilterManager
+
+    // ──── ACTIVE FILTERS BAR ────
+    function updateActiveFiltersBar() {
+        const bar = $('activeFiltersBar');
+        bar.innerHTML = '';
+        const filters = [];
+        if (state.datePreset) filters.push({label: state.datePreset === 'custom' ? `${state.dateFrom} → ${state.dateTo}` : state.datePreset.replace('_', ' '), key: 'date'});
+        if (state.productType) filters.push({label: `Type: ${state.productType}`, key: 'productType'});
+        if (state.category) filters.push({label: `Category: ${state.category}`, key: 'category'});
+        if (state.brand) filters.push({label: `Brand: ${state.brand}`, key: 'brand'});
+        if (state.productName) filters.push({label: `Product: ${state.productName}`, key: 'productName'});
+        if (state.minAmount) filters.push({label: `Min ₹${state.minAmount}`, key: 'minAmount'});
+        if (state.maxAmount) filters.push({label: `Max ₹${state.maxAmount}`, key: 'maxAmount'});
+        if (state.search) filters.push({label: `Search: ${state.search}`, key: 'search'});
+
+        filters.forEach(f => {
+            const chip = document.createElement('span');
+            chip.className = 'badge bg-primary bg-opacity-10 text-primary border border-primary-subtle d-inline-flex align-items-center gap-1 px-2 py-1';
+            chip.innerHTML = `${escHtml(f.label)} <i class="fa-solid fa-xmark" style="cursor:pointer; font-size:0.65rem;" data-key="${f.key}"></i>`;
+            chip.querySelector('i').addEventListener('click', () => removeFilter(f.key));
+            bar.appendChild(chip);
+        });
+    }
+
+    function removeFilter(key) {
+        switch(key) {
+            case 'date': state.datePreset = ''; state.dateFrom = ''; state.dateTo = ''; $('dateFrom').value = ''; $('dateTo').value = ''; setActivePresetBtn(''); break;
+            case 'productType': state.productType = ''; $('filterProductType').value = ''; break;
+            case 'category': state.category = ''; $('filterCategory').value = ''; break;
+            case 'brand': state.brand = ''; $('filterBrand').value = ''; break;
+            case 'productName': state.productName = ''; $('filterProductName').value = ''; break;
+            case 'minAmount': state.minAmount = ''; $('filterMinAmount').value = ''; break;
+            case 'maxAmount': state.maxAmount = ''; $('filterMaxAmount').value = ''; break;
+            case 'search': state.search = ''; $('filterSearch').value = ''; break;
+        }
+        state.page = 1;
+        refreshAll();
+    }
+
+    // ──── EVENT LISTENERS ────
+
+    // Date preset buttons
+    document.querySelectorAll('#datePresetBtns .date-preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const preset = btn.dataset.preset;
+            if (preset === 'custom') {
+                $('customDateGroup').classList.toggle('show');
+                return;
+            }
+            state.datePreset = preset;
+            state.dateFrom = '';
+            state.dateTo = '';
+            $('customDateGroup').classList.remove('show');
+            state.page = 1;
+            setActivePresetBtn(preset);
+            refreshAll();
+        });
+    });
+
+    function setActivePresetBtn(preset) {
+        document.querySelectorAll('#datePresetBtns .date-preset-btn').forEach(b => b.classList.remove('active'));
+        const active = document.querySelector(`#datePresetBtns .date-preset-btn[data-preset="${preset}"]`);
+        if (active) active.classList.add('active');
+    }
+
+    // Custom date apply
+    $('applyCustomDate').addEventListener('click', () => {
+        state.datePreset = 'custom';
+        state.dateFrom = $('dateFrom').value;
+        state.dateTo = $('dateTo').value;
+        state.page = 1;
+        setActivePresetBtn('custom');
+        refreshAll();
+    });
+
+    // Dropdown filters (Handled largely by DependentFilterManager)
+    // We just need to trigger refreshAll when they change. Manager handles their resets.
+
+    // Text input filters (debounced)
+    let searchTimer;
+    function debounceFilter(inputId, stateKey) {
+        $(inputId).addEventListener('input', function() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => {
+                state[stateKey] = this.value.trim();
+                state.page = 1;
+                refreshAll();
+            }, 400);
+        });
+    }
+    debounceFilter('filterProductName', 'productName');
+    debounceFilter('filterMinAmount', 'minAmount');
+    debounceFilter('filterMaxAmount', 'maxAmount');
+    debounceFilter('filterSearch', 'search');
+
+    // Clear all filters
+    $('clearAllFilters').addEventListener('click', () => {
+        Object.keys(state).forEach(k => {
+            if (k !== 'sortBy' && k !== 'sortDir' && k !== 'page' && k !== 'perPage') state[k] = '';
+        });
+        state.page = 1;
+        $('dateFrom').value = '';
+        $('dateTo').value = '';
+        $('filterProductName').value = '';
+        $('filterMinAmount').value = '';
+        $('filterMaxAmount').value = '';
+        $('filterSearch').value = '';
+        $('customDateGroup').classList.remove('show');
+        setActivePresetBtn('');
+        if (window.salesHistoryFilterManager) {
+            window.salesHistoryFilterManager.reset();
+        } else {
+            $('filterProductType').value = '';
+            $('filterCategory').value = '';
+            $('filterBrand').value = '';
+        }
+        refreshAll();
+    });
+
+    // Sorting
+    document.querySelectorAll('.sales-table th[data-sort]').forEach(th => {
+        th.addEventListener('click', () => {
+            const sortKey = th.dataset.sort;
+            if (state.sortBy === sortKey) {
+                state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                state.sortBy = sortKey;
+                state.sortDir = 'desc';
+            }
+            state.page = 1;
+
+            // Update sort indicators
+            document.querySelectorAll('.sales-table th').forEach(h => h.classList.remove('sort-active'));
+            th.classList.add('sort-active');
+            const icon = th.querySelector('.sort-icon');
+            if (icon) {
+                icon.className = 'fa-solid sort-icon ' + (state.sortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down');
+            }
+
+            fetchData();
+        });
+    });
+
+    // Per page
+    $('perPageSelect').addEventListener('change', function() {
+        state.perPage = parseInt(this.value);
+        state.page = 1;
+        fetchData();
+    });
+
+    // ──── EXPORT FUNCTIONS ────
+
+    function fetchExportData(callback) {
+        const qs = buildQueryString();
+        fetch(`/sales/api/export?${qs}`)
+            .then(r => r.json())
+            .then(data => callback(data.data))
+            .catch(err => console.error('Export error:', err));
+    }
+
+    // CSV Export
+    $('exportCSV').addEventListener('click', () => {
+        fetchExportData(data => {
+            const headers = ['Sale ID', 'Date', 'Product ID', 'Product', 'Type', 'Category', 'Brand', 'Quantity', 'Unit Price', 'Total Amount'];
+            let csv = headers.join(',') + '\n';
+            data.forEach(r => {
+                const unitPrice = r.quantity_sold > 0 ? (r.total_price / r.quantity_sold).toFixed(2) : '0.00';
+                csv += [r.id, r.sale_date, r.product_id_str, `"${r.product_name}"`, `"${r.product_type}"`, `"${r.category}"`, `"${r.brand}"`, r.quantity_sold, unitPrice, r.total_price].join(',') + '\n';
+            });
+            downloadFile(csv, 'sales_history.csv', 'text/csv');
+        });
+    });
+
+    // Excel Export
+    $('exportExcel').addEventListener('click', () => {
+        fetchExportData(data => {
+            const wsData = [['Sale ID', 'Date', 'Product ID', 'Product', 'Type', 'Category', 'Brand', 'Quantity', 'Unit Price', 'Total Amount']];
+            data.forEach(r => {
+                const unitPrice = r.quantity_sold > 0 ? +(r.total_price / r.quantity_sold).toFixed(2) : 0;
+                wsData.push([r.id, r.sale_date, r.product_id_str, r.product_name, r.product_type, r.category, r.brand, r.quantity_sold, unitPrice, r.total_price]);
+            });
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            XLSX.utils.book_append_sheet(wb, ws, 'Sales History');
+            XLSX.writeFile(wb, 'sales_history.xlsx');
+        });
+    });
+
+    // PDF Export
+    $('exportPDF').addEventListener('click', () => {
+        fetchExportData(data => {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'mm', 'a4');
+            doc.setFontSize(16);
+            doc.text('Sales History Report', 14, 15);
+            doc.setFontSize(9);
+            doc.text('Generated: ' + new Date().toLocaleString(), 14, 22);
+
+            const rows = data.map(r => {
+                const unitPrice = r.quantity_sold > 0 ? formatCurrency(r.total_price / r.quantity_sold) : '₹0.00';
+                return [r.id, r.sale_date, r.product_id_str, r.product_name.substring(0, 30), r.brand, r.quantity_sold, unitPrice, formatCurrency(r.total_price)];
+            });
+            doc.autoTable({
+                head: [['ID', 'Date', 'Product ID', 'Product', 'Brand', 'Qty', 'Unit Price', 'Total']],
+                body: rows,
+                startY: 28,
+                styles: { fontSize: 8, cellPadding: 2 },
+                headStyles: { fillColor: [14, 165, 233], textColor: 255, fontStyle: 'bold' },
+                alternateRowStyles: { fillColor: [248, 250, 252] }
+            });
+            doc.save('sales_history.pdf');
+        });
+    });
+
+    // Print
+    $('exportPrint').addEventListener('click', () => {
+        fetchExportData(data => {
+            let html = '<html><head><title>Sales History Report</title>';
+            html += '<style>body{font-family:Inter,sans-serif;padding:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#0ea5e9;color:white}tr:nth-child(even){background:#f8fafc}h1{font-size:18px;margin-bottom:4px}p{font-size:11px;color:#666}</style></head><body>';
+            html += '<h1>Sales History Report</h1><p>Generated: ' + new Date().toLocaleString() + ' | Records: ' + data.length + '</p>';
+            html += '<table><tr><th>ID</th><th>Date</th><th>Product ID</th><th>Product</th><th>Brand</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr>';
+            data.forEach(r => {
+                const unitPrice = r.quantity_sold > 0 ? formatCurrency(r.total_price / r.quantity_sold) : '₹0.00';
+                html += `<tr><td>${r.id}</td><td>${r.sale_date}</td><td>${r.product_id_str}</td><td>${r.product_name}</td><td>${r.brand}</td><td>${r.quantity_sold}</td><td>${unitPrice}</td><td>${formatCurrency(r.total_price)}</td></tr>`;
+            });
+            html += '</table></body></html>';
+            const win = window.open('', '_blank');
+            win.document.write(html);
+            win.document.close();
+            win.print();
+        });
+    });
+
+    function downloadFile(content, filename, type) {
+        const blob = new Blob([content], {type: type + ';charset=utf-8;'});
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    }
+
+    // ──── INIT ────
+    document.addEventListener('DOMContentLoaded', () => {
+        // Initialize dependent filters
+        const filterManager = new DependentFilterManager({
+            typeEl: 'filterProductType',
+            categoryEl: 'filterCategory',
+            brandEl: 'filterBrand',
+            placeholderType: 'All Types',
+            placeholderCategory: 'All Categories',
+            placeholderBrand: 'All Brands',
+            onChangeCallback: () => {
+                state.productType = $('filterProductType').value;
+                state.category = $('filterCategory').value;
+                state.brand = $('filterBrand').value;
+                state.page = 1;
+                refreshAll();
+            }
+        });
+        window.salesHistoryFilterManager = filterManager;
+
+        refreshAll();
+    });
+})();
+</script>
+{% endblock %}

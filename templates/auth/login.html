@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Login - Smart Inventory AI{% endblock %}
+
+{% block login_content %}
+<div class="min-vh-100 d-flex align-items-center justify-content-center py-5" style="background-color: var(--bg-page);">
+    <div class="container" style="max-width: 420px;">
+        <div class="card p-4 p-md-5 border-0 shadow-md">
+            <div class="text-center mb-4">
+                <div class="icon-box icon-brand mx-auto mb-3" style="width: 52px; height: 52px; font-size: 22px;">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                </div>
+                <h4 class="fw-bold text-dark mb-1">Smart Inventory AI</h4>
+                <p class="text-secondary small mb-0">Sign in to access admin analytics & forecasting</p>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert {% if category == 'danger' %}alert-danger{% else %}alert-info{% endif %} alert-dismissible fade show border-0 small mb-3" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form action="{{ url_for('auth.login') }}" method="POST">
+                <div class="mb-3">
+                    <label for="username" class="eyebrow-label mb-2 d-block">Username or Email</label>
+                    <input type="text" class="form-control" id="username" name="username" placeholder="admin or email" required autofocus>
+                </div>
+
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label for="password" class="eyebrow-label mb-0">Password</label>
+                        <a href="{{ url_for('auth.forgot_password') }}" class="text-brand text-decoration-none small">Forgot password?</a>
+                    </div>
+                    <input type="password" class="form-control" id="password" name="password" placeholder="••••••••" required>
+                </div>
+
+                <button type="submit" class="btn btn-brand w-100 py-2 justify-content-center">
+                    Sign in to Portal
+                </button>
+            </form>
+
+
+        </div>
+    </div>
+</div>
+{% endblock %}

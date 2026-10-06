@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}Sales Entry & History - Smart Inventory AI{% endblock %}
+{% block header_title %}Sales Management & Transactions{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Sales Entry Form Card -->
+    <div class="col-12 col-lg-4">
+        <div class="card p-4 border-0 shadow-sm h-100">
+            <h5 class="fw-bold text-dark mb-2"><i class="fa-solid fa-cart-plus text-success me-2"></i> Record New Sale</h5>
+            <p class="text-secondary small mb-4">Submitting a sale automatically deducts current product inventory and logs the transaction.</p>
+
+            <form action="{{ url_for('sales.add_sale') }}" method="POST">
+                <div class="mb-3 position-relative">
+                    <label class="form-label text-secondary small fw-bold">SELECT PRODUCT *</label>
+                    <input type="text" id="productSearchInput" class="form-control" placeholder="Search by ID, Name, or Brand..." autocomplete="off" required>
+                    <input type="hidden" name="product_id" id="hiddenProductId" required>
+                    <div id="productDropdown" class="dropdown-menu w-100 shadow-sm" style="max-height: 250px; overflow-y: auto; display: none; position: absolute; z-index: 1000; margin-top: 2px;">
+                    </div>
+                </div>
+
+                <div id="selectedProductDetails" class="p-3 bg-light border rounded mb-3 text-start shadow-sm" style="display: none;">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-bold">QUANTITY SOLD *</label>
+                    <input type="number" name="quantity_sold" id="quantitySoldInput" class="form-control" min="1" value="1" required oninput="updatePriceEstimate()">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-bold">SALE DATE *</label>
+                    <input type="date" name="sale_date" class="form-control" value="{{ current_date or '2026-04-20' }}" required>
+                </div>
+
+                <!-- Estimated Total Display -->
+                <div class="p-3 bg-light border rounded mb-4 text-center shadow-sm">
+                    <div class="text-secondary small fw-bold">ESTIMATED TOTAL REVENUE</div>
+                    <div class="fs-2 fw-bold text-success mt-1" id="estimatedTotalDisplay">₹0.00</div>
+                </div>
+
+                <button type="submit" class="btn btn-brand w-100">
+                    <i class="fa-solid fa-check-circle me-1"></i> Record Sale
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sales History Table Card -->
+    <div class="col-12 col-lg-8">
+        <div class="card p-4 border-0 shadow-sm h-100">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="fw-bold text-dark mb-0"><i class="fa-solid fa-receipt text-brand me-2"></i> Complete Sales History</h5>
+                <a href="{{ url_for('sales.upload_csv') }}" class="btn btn-secondary-custom btn-sm">
+                    <i class="fa-solid fa-file-csv me-1 text-secondary"></i> Upload Historical CSV
+                </a>
+            </div>
+
+            <div class="table-custom-wrapper">
+                <div class="table-responsive">
+                    <table class="table table-custom mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Sale ID</th>
+                                <th>Sale Date</th>
+                                <th>Product</th>
+                                <th>Qty Sold</th>
+                                <th class="text-end">Total Amount (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in sales %}
+                            <tr>
+                                <td><span class="text-secondary fw-semibold">#{{ s.id }}</span></td>
+                                <td><span class="text-dark fw-semibold"><i class="fa-regular fa-calendar text-muted me-1"></i> {{ s.sale_date }}</span></td>
+                                <td>
+                                    <div class="fw-bold text-dark">{{ s.product.name if s.product else 'N/A' }}</div>
+                                    <span class="badge bg-light text-secondary border mt-1">{{ s.product.product_id_str if s.product else '' }}</span>
+                                </td>
+                                <td><span class="fw-bold text-dark fs-6">{{ s.quantity_sold }}</span> <span class="text-secondary small">units</span></td>
+                                <td class="text-end"><span class="fw-bold text-success fs-6">₹{{ "{:,.2f}".format(s.total_price) }}</span></td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-secondary py-5">
+                                    <i class="fa-solid fa-receipt fs-2 mb-3 text-muted"></i>
+                                    <div class="fw-semibold">No sales records logged yet.</div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const productsData = [
+    {% for p in products %}
+    {
+        id: {{ p.id }},
+        product_id_str: "{{ p.product_id_str|replace('\"', '\\\"') }}",
+        name: "{{ p.name|replace('\"', '\\\"')|replace('\'', '\\\'') }}",
+        brand: "{{ p.brand|replace('\"', '\\\"')|replace('\'', '\\\'') }}",
+        product_type: "{{ p.product_type|replace('\"', '\\\"')|replace('\'', '\\\'') }}",
+        category: "{{ p.category|replace('\"', '\\\"')|replace('\'', '\\\'') }}",
+        price: {{ p.price }},
+        unit_price: {{ p.mrp if p.mrp else p.price }},
+        stock: {{ p.current_stock }}
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+
+let currentFocus = -1;
+const searchInput = document.getElementById('productSearchInput');
+const dropdown = document.getElementById('productDropdown');
+const hiddenInput = document.getElementById('hiddenProductId');
+const detailsBox = document.getElementById('selectedProductDetails');
+
+if(searchInput) {
+    searchInput.addEventListener('input', function() {
+        const val = this.value.trim();
+        dropdown.innerHTML = '';
+        if (!val) {
+            dropdown.style.display = 'none';
+            hiddenInput.value = '';
+            detailsBox.style.display = 'none';
+            updatePriceEstimate();
+            return;
+        }
+        
+        let matches = productsData.filter(p => 
+            p.product_id_str.toLowerCase().includes(val.toLowerCase()) || 
+            p.name.toLowerCase().includes(val.toLowerCase()) ||
+            p.brand.toLowerCase().includes(val.toLowerCase())
+        );
+
+        if (matches.length === 0) {
+            dropdown.innerHTML = '<div class="dropdown-item text-muted pe-none">No matching products found</div>';
+            dropdown.style.display = 'block';
+            return;
+        }
+
+        matches.forEach(p => {
+            const div = document.createElement('div');
+            div.className = 'dropdown-item text-wrap py-2 border-bottom';
+            div.style.cursor = 'pointer';
+            
+            const displayStr = `${p.product_id_str} - ${p.name}`;
+            
+            // Highlight match
+            const regex = new RegExp("(" + val.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + ")", "gi");
+            div.innerHTML = displayStr.replace(regex, "<strong>$1</strong>");
+            
+            div.addEventListener('click', () => selectProduct(p));
+            dropdown.appendChild(div);
+        });
+        
+        dropdown.style.display = 'block';
+        currentFocus = -1;
+    });
+
+    searchInput.addEventListener('keydown', function(e) {
+        const items = dropdown.querySelectorAll('.dropdown-item:not(.text-muted)');
+        if (!items.length) return;
+
+        if (e.key === 'ArrowDown') {
+            currentFocus++;
+            addActive(items);
+            e.preventDefault();
+        } else if (e.key === 'ArrowUp') {
+            currentFocus--;
+            addActive(items);
+            e.preventDefault();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (currentFocus > -1) {
+                items[currentFocus].click();
+            } else if (dropdown.style.display === 'block') {
+                items[0].click();
+            }
+        }
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (e.target !== searchInput && e.target !== dropdown) {
+            dropdown.style.display = 'none';
+        }
+    });
+}
+
+function addActive(items) {
+    if (!items) return false;
+    removeActive(items);
+    if (currentFocus >= items.length) currentFocus = 0;
+    if (currentFocus < 0) currentFocus = items.length - 1;
+    items[currentFocus].classList.add('bg-light', 'fw-bold');
+    items[currentFocus].scrollIntoView({ block: 'nearest' });
+}
+
+function removeActive(items) {
+    for (let i = 0; i < items.length; i++) {
+        items[i].classList.remove('bg-light', 'fw-bold');
+    }
+}
+
+function selectProduct(p) {
+    searchInput.value = `${p.product_id_str} - ${p.name}`;
+    hiddenInput.value = p.id;
+    dropdown.style.display = 'none';
+    
+    // Update details box
+    detailsBox.innerHTML = `
+        <div class="row g-2 small">
+            <div class="col-12 text-dark fw-bold mb-1 border-bottom pb-1">${p.name}</div>
+            <div class="col-6"><span class="text-secondary">Type:</span> <span class="fw-semibold text-dark">${p.product_type}</span></div>
+            <div class="col-6"><span class="text-secondary">Category:</span> <span class="fw-semibold text-dark">${p.category}</span></div>
+            <div class="col-6"><span class="text-secondary">Brand:</span> <span class="fw-semibold text-dark">${p.brand}</span></div>
+            <div class="col-6"><span class="text-secondary">Available Stock:</span> <span class="fw-bold text-${p.stock > 0 ? 'success' : 'danger'}">${p.stock}</span></div>
+            <div class="col-6"><span class="text-secondary">Unit Price:</span> <span class="fw-semibold text-dark">₹${p.unit_price.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span></div>
+            <div class="col-12 mt-2 pt-1 border-top"><span class="text-secondary">Current Selling Price:</span> <span class="fw-bold text-success fs-6">₹${p.price.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span></div>
+        </div>
+    `;
+    detailsBox.style.display = 'block';
+    
+    updatePriceEstimate();
+}
+
+function updatePriceEstimate() {
+    const selectedId = document.getElementById('hiddenProductId') ? document.getElementById('hiddenProductId').value : null;
+    let price = 0;
+    
+    if (selectedId && typeof productsData !== 'undefined') {
+        const product = productsData.find(p => p.id == selectedId);
+        if (product) price = product.price;
+    }
+
+    const qty = parseInt(document.getElementById('quantitySoldInput').value) || 0;
+    const total = price * qty;
+    
+    const display = document.getElementById('estimatedTotalDisplay');
+    if(display) {
+        display.innerText = '₹' + total.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    // Set default date to today
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = document.querySelector('input[name="sale_date"]');
+    if (dateInput) dateInput.value = today;
+    updatePriceEstimate();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+
+{% block title %}Products Management - Smart Inventory AI{% endblock %}
+{% block header_title %}Product Catalog & Inventory Items{% endblock %}
+
+{% block content %}
+<div class="card p-4 border-0 shadow-sm mb-4">
+    <!-- Header Controls: Search, Category Filter, Add Product Button -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div>
+            <h4 class="fw-bold text-dark mb-0"><i class="fa-solid fa-boxes-packing text-primary me-2"></i> Product
+                Management</h4>
+            <p class="text-secondary small mb-0 mt-1">View, add, search, and update product catalog with dynamic
+                dependent dropdowns</p>
+        </div>
+
+        <button type="button" class="btn btn-brand" data-bs-toggle="modal"
+            data-bs-target="#addProductModal">
+            <i class="fa-solid fa-plus me-1"></i> Add New Product
+        </button>
+    </div>
+
+    <!-- Filter & Search Bar Form -->
+    <form method="GET" action="{{ url_for('products.list_products') }}"
+        class="row g-2 mb-4 bg-light p-3 rounded-3 border">
+        <div class="col-12 col-md-3">
+            <div class="input-group">
+                <span class="input-group-text bg-white border-end-0 text-secondary"><i
+                        class="fa-solid fa-magnifying-glass"></i></span>
+                <input type="text" name="search" class="form-control border-start-0" placeholder="Search products..."
+                    value="{{ search_query }}">
+            </div>
+        </div>
+        <div class="col-12 col-md-3">
+            <select name="product_type" id="filterProductType" class="form-select">
+                <option value="All">All Product Types</option>
+                {% for p_type in product_types %}
+                <option value="{{ p_type }}" {% if selected_product_type==p_type %}selected{% endif %}>{{ p_type }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-12 col-md-2">
+            <select name="category" id="filterCategory" class="form-select">
+                <option value="All">All Categories</option>
+                {% for c in categories %}
+                <option value="{{ c }}" {% if selected_category==c %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-12 col-md-2">
+            <select name="brand" id="filterBrand" class="form-select">
+                <option value="All">All Brands</option>
+                {% for b in brands %}
+                <option value="{{ b }}" {% if selected_brand==b %}selected{% endif %}>{{ b }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-6 col-md-1">
+            <select name="abc_class" id="filterAbc" class="form-select" title="Filter by ABC Revenue Class">
+                <option value="">ABC</option>
+                <option value="A" {% if selected_abc=='A' %}selected{% endif %}>Class A (Top 80%)</option>
+                <option value="B" {% if selected_abc=='B' %}selected{% endif %}>Class B (Next 15%)</option>
+                <option value="C" {% if selected_abc=='C' %}selected{% endif %}>Class C (Bottom 5%)</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-1">
+            <select name="xyz_class" id="filterXyz" class="form-select" title="Filter by XYZ Demand Predictability">
+                <option value="">XYZ</option>
+                <option value="X" {% if selected_xyz=='X' %}selected{% endif %}>Class X (Stable)</option>
+                <option value="Y" {% if selected_xyz=='Y' %}selected{% endif %}>Class Y (Moderate)</option>
+                <option value="Z" {% if selected_xyz=='Z' %}selected{% endif %}>Class Z (Erratic)</option>
+            </select>
+        </div>
+        <div class="col-12 col-md-2 d-flex gap-2">
+            <select name="sort" class="form-select" title="Sort products">
+                <option value="id" {% if sort_by=='id' %}selected{% endif %}>Sort: Default</option>
+                <option value="abc" {% if sort_by=='abc' %}selected{% endif %}>Sort: ABC-XYZ</option>
+                <option value="revenue" {% if sort_by=='revenue' %}selected{% endif %}>Sort: Revenue %</option>
+                <option value="variability" {% if sort_by=='variability' %}selected{% endif %}>Sort: Predictability (CV)</option>
+                <option value="name" {% if sort_by=='name' %}selected{% endif %}>Sort: Name</option>
+                <option value="stock" {% if sort_by=='stock' %}selected{% endif %}>Sort: Stock</option>
+            </select>
+            <button type="submit" class="btn btn-brand px-3"><i
+                    class="fa-solid fa-filter"></i></button>
+            <a href="{{ url_for('products.list_products') }}" class="btn btn-secondary-custom" title="Reset Filters"><i
+                    class="fa-solid fa-rotate-left"></i></a>
+        </div>
+    </form>
+
+    <!-- Product Table -->
+    <div class="table-custom-wrapper">
+        <div class="table-responsive">
+            <table class="table table-custom mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th>Product Code</th>
+                        <th>Product Type</th>
+                        <th>Product Name</th>
+                        <th>Category</th>
+                        <th>Brand</th>
+                        <th class="text-center">ABC / XYZ</th>
+                        <th>Price (₹)</th>
+                        <th>Stock Level</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in products %}
+                    <tr class="{% if p.is_low_stock %}row-low-stock{% endif %}">
+                        <td><span class="badge-soft-neutral fw-semibold">{{ p.product_id_str }}</span></td>
+                        <td><span class="badge-soft-brand">{{ p.product_type }}</span></td>
+                        <td>
+                            <div>
+                                <div class="fw-bold text-dark">{{ p.name }}</div>
+                                <div class="text-tertiary small text-truncate fw-medium" style="max-width: 240px;">{{
+                                    p.description or 'No description' }}</div>
+                            </div>
+                        </td>
+                        <td><span class="badge-soft-neutral">{{ p.category }}</span></td>
+                        <td><span class="text-dark fw-semibold">{{ p.brand }}</span></td>
+                        <td class="text-center">
+                            {% if p.combined_class %}
+                                <div class="d-flex align-items-center justify-content-center gap-1">
+                                    <span class="{% if p.abc_class == 'A' %}badge-soft-success{% elif p.abc_class == 'B' %}badge-soft-warning{% else %}badge-soft-neutral{% endif %}" title="ABC Class: {{ p.abc_class }} ({{ p.revenue_contribution_percent }}% Revenue)">{{ p.abc_class }}</span>
+                                    <span class="{% if p.xyz_class == 'X' %}badge-soft-success{% elif p.xyz_class == 'Y' %}badge-soft-warning{% else %}badge-soft-danger{% endif %}" title="XYZ Class: {{ p.xyz_class }} (CV: {{ p.demand_variability }})">{{ p.xyz_class }}</span>
+                                </div>
+                                <div class="text-secondary small mt-1">{{ p.revenue_contribution_percent }}% rev</div>
+                            {% else %}
+                                <span class="badge-soft-neutral">Unclassified</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="fw-semibold text-dark tabular-nums">₹{{ "{:,.2f}".format(p.price) }}</span></td>
+                        <td>
+                            <span class="fw-bold tabular-nums {% if p.is_low_stock %}text-danger{% else %}text-dark{% endif %}">{{
+                                p.current_stock }}</span>
+                            <span class="text-secondary small fw-semibold">/ {{ p.reorder_level }}</span>
+                            {% if p.is_low_stock %}
+                            <span class="badge-soft-danger ms-1"><i
+                                    class="fa-solid fa-triangle-exclamation"></i> Low</span>
+                            {% else %}
+                            <span class="badge-soft-success ms-1">OK</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end text-nowrap">
+                            <button class="btn btn-sm btn-secondary-custom me-1" data-bs-toggle="modal"
+                                data-bs-target="#editModal{{ p.id }}"
+                                onclick="initEditModal('{{ p.id }}', '{{ p.product_type }}', '{{ p.category }}', '{{ p.brand }}')"
+                                title="Edit Product">
+                                <i class="fa-solid fa-pen text-secondary"></i>
+                            </button>
+                            <button class="btn btn-sm btn-secondary-custom" data-bs-toggle="modal"
+                                data-bs-target="#deleteModal{{ p.id }}" title="Delete Product">
+                                <i class="fa-solid fa-trash text-danger"></i>
+                            </button>
+                        </td>
+                    </tr>
+
+                    <!-- Edit Product Modal -->
+                    <div class="modal fade" id="editModal{{ p.id }}" tabindex="-1">
+                        <div class="modal-dialog modal-dialog-centered modal-lg">
+                            <div class="modal-content modal-content-custom">
+                                <form action="{{ url_for('products.edit_product', id=p.id) }}" method="POST">
+                                    <div class="modal-header modal-header-custom">
+                                        <h5 class="modal-title fw-bold"><i
+                                                class="fa-solid fa-pen text-primary me-2"></i> Edit Product: {{
+                                            p.product_id_str }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body bg-light">
+                                        <!-- Dependent Dropdown Row: Product Type, Category, Brand -->
+                                        <div class="row g-3 mb-3 bg-white p-3 rounded border">
+                                            <div class="col-md-4">
+                                                <label class="form-label text-secondary small fw-bold">PRODUCT TYPE
+                                                    *</label>
+                                                <select name="product_type" id="editProductType{{ p.id }}"
+                                                    class="form-select" required>
+                                                    {% for p_type in product_data_map.keys() %}
+                                                    <option value="{{ p_type }}" {% if p.product_type==p_type
+                                                        %}selected{% endif %}>{{ p_type }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label text-secondary small fw-bold">CATEGORY
+                                                    *</label>
+                                                <select name="category" id="editCategory{{ p.id }}" class="form-select"
+                                                    required>
+                                                    <!-- Populated dynamically via JS -->
+                                                </select>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label text-secondary small fw-bold">BRAND *</label>
+                                                <select name="brand" id="editBrand{{ p.id }}" class="form-select"
+                                                    required>
+                                                    <!-- Populated dynamically via JS -->
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-3 bg-white p-3 rounded border">
+                                            <label class="form-label text-secondary small fw-bold">PRODUCT NAME / MODEL
+                                                *</label>
+                                            <input type="text" name="name" class="form-control" value="{{ p.name }}"
+                                                required>
+                                        </div>
+
+                                        <div class="row g-3 mb-3 bg-white p-3 rounded border mx-0">
+                                            <div class="col-md-6 ps-0">
+                                                <label class="form-label text-secondary small fw-bold">PRICE (₹)
+                                                    *</label>
+                                                <input type="number" step="0.01" name="price" class="form-control"
+                                                    value="{{ p.price }}" required>
+                                            </div>
+                                            <div class="col-md-6 pe-0">
+                                                <label class="form-label text-secondary small fw-bold">REORDER LEVEL
+                                                    *</label>
+                                                <input type="number" name="reorder_level" class="form-control"
+                                                    value="{{ p.reorder_level }}" required>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-3 bg-white p-3 rounded border">
+                                            <label class="form-label text-secondary small fw-bold">SUPPLIER NAME</label>
+                                            <input type="text" name="supplier_name" class="form-control"
+                                                value="{{ p.supplier_name }}">
+                                        </div>
+
+                                        <div class="mb-0 bg-white p-3 rounded border">
+                                            <label class="form-label text-secondary small fw-bold">DESCRIPTION</label>
+                                            <textarea name="description" class="form-control"
+                                                rows="2">{{ p.description }}</textarea>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer modal-footer-custom bg-white">
+                                        <button type="button" class="btn btn-outline-custom"
+                                            data-bs-dismiss="modal">Cancel</button>
+                                        <button type="submit" class="btn btn-primary-custom"><i
+                                                class="fa-solid fa-save me-1"></i> Save Changes</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Delete Product Modal -->
+                    <div class="modal fade" id="deleteModal{{ p.id }}" tabindex="-1">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content modal-content-custom">
+                                <form action="{{ url_for('products.delete_product', id=p.id) }}" method="POST">
+                                    <div class="modal-header modal-header-custom">
+                                        <h5 class="modal-title text-danger fw-bold"><i
+                                                class="fa-solid fa-triangle-exclamation me-2"></i> Confirm Delete</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body bg-light text-dark py-4">
+                                        <div class="text-center mb-3">
+                                            <i class="fa-solid fa-circle-exclamation text-danger"
+                                                style="font-size: 3rem;"></i>
+                                        </div>
+                                        <div class="text-center">
+                                            Are you sure you want to permanently delete <br><strong>{{ p.name
+                                                }}</strong> ({{ p.product_id_str }})?<br>
+                                            <span class="text-secondary small">This action cannot be undone.</span>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer modal-footer-custom">
+                                        <button type="button" class="btn btn-outline-custom"
+                                            data-bs-dismiss="modal">Cancel</button>
+                                        <button type="submit" class="btn btn-danger text-white fw-bold"><i
+                                                class="fa-solid fa-trash me-1"></i> Delete</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-secondary py-5">
+                            <i class="fa-solid fa-box-open fs-2 mb-3 text-muted"></i>
+                            <div class="fw-semibold">No products found matching criteria.</div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Product Modal -->
+<div class="modal fade" id="addProductModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content modal-content-custom">
+            <form action="{{ url_for('products.add_product') }}" method="POST">
+                <div class="modal-header modal-header-custom">
+                    <h5 class="modal-title fw-bold text-dark"><i class="fa-solid fa-box text-primary me-2"></i> Add New
+                        Product to Inventory</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-light">
+                    <!-- Product Code & Name -->
+                    <div class="row g-3 mb-3 bg-white p-3 rounded border mx-0">
+                        <div class="col-md-4 ps-0">
+                            <label class="form-label text-secondary small fw-bold">PRODUCT ID CODE *</label>
+                            <input type="text" name="product_id_str" class="form-control" placeholder="e.g. PRD-1007"
+                                required>
+                        </div>
+                        <div class="col-md-8 pe-0">
+                            <label class="form-label text-secondary small fw-bold">PRODUCT NAME / MODEL *</label>
+                            <input type="text" name="name" class="form-control" placeholder="e.g. ASUS ROG Strix G16"
+                                required>
+                        </div>
+                    </div>
+
+                    <!-- Dependent Dropdowns: Product Type, Category, Brand -->
+                    <div class="row g-3 mb-3 bg-white p-3 rounded border mx-0">
+                        <div class="col-md-4 ps-0">
+                            <label class="form-label text-secondary small fw-bold">PRODUCT TYPE *</label>
+                            <select name="product_type" id="addProductType" class="form-select" required>
+                                {% for p_type in product_data_map.keys() %}
+                                <option value="{{ p_type }}">{{ p_type }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label text-secondary small fw-bold">CATEGORY *</label>
+                            <select name="category" id="addCategory" class="form-select" required>
+                                <!-- Dynamically populated by JS -->
+                            </select>
+                        </div>
+                        <div class="col-md-4 pe-0">
+                            <label class="form-label text-secondary small fw-bold">BRAND *</label>
+                            <select name="brand" id="addBrand" class="form-select" required>
+                                <!-- Dynamically populated by JS -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3 bg-white p-3 rounded border mx-0">
+                        <div class="col-md-4 ps-0">
+                            <label class="form-label text-secondary small fw-bold">PRICE (₹) *</label>
+                            <input type="number" step="0.01" name="price" class="form-control" placeholder="0.00"
+                                required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label text-secondary small fw-bold">INITIAL STOCK *</label>
+                            <input type="number" name="current_stock" class="form-control" placeholder="0" value="0"
+                                required>
+                        </div>
+                        <div class="col-md-4 pe-0">
+                            <label class="form-label text-secondary small fw-bold">REORDER LEVEL *</label>
+                            <input type="number" name="reorder_level" class="form-control" placeholder="10" value="10"
+                                required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3 bg-white p-3 rounded border">
+                        <label class="form-label text-secondary small fw-bold">SUPPLIER NAME</label>
+                        <input type="text" name="supplier_name" class="form-control"
+                            placeholder="Supplier company name">
+                    </div>
+
+                    <div class="mb-0 bg-white p-3 rounded border">
+                        <label class="form-label text-secondary small fw-bold">DESCRIPTION</label>
+                        <textarea name="description" class="form-control" rows="2"
+                            placeholder="Product details, specifications..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer modal-footer-custom bg-white">
+                    <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom fw-bold"><i class="fa-solid fa-plus me-1"></i>
+                        Add Product</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        // Toolbar filter manager
+        const toolbarManager = new DependentFilterManager({
+            typeEl: 'filterProductType',
+            categoryEl: 'filterCategory',
+            brandEl: 'filterBrand',
+            placeholderType: 'All Product Types',
+            placeholderCategory: 'All Categories',
+            placeholderBrand: 'All Brands',
+            onChangeCallback: (mgr, trigger) => {
+                if (trigger && trigger !== 'init' && trigger !== 'reset') {
+                    const form = document.getElementById('filterProductType')?.form;
+                    if (form) form.submit();
+                }
+            }
+        });
+
+        // Initialize Add Modal Dropdowns
+        new DependentFilterManager({
+            typeEl: 'addProductType',
+            categoryEl: 'addCategory',
+            brandEl: 'addBrand',
+            placeholderType: 'Select Type...',
+            placeholderCategory: 'Select Category...',
+            placeholderBrand: 'Select Brand...'
+        });
+
+        // Initialize all Edit Modals
+        {% for p in products %}
+        new DependentFilterManager({
+            typeEl: 'editProductType{{ p.id }}',
+            categoryEl: 'editCategory{{ p.id }}',
+            brandEl: 'editBrand{{ p.id }}',
+            initialType: '{{ p.product_type }}',
+            initialCategory: '{{ p.category }}',
+            initialBrand: '{{ p.brand }}',
+            placeholderType: 'Select Type...',
+            placeholderCategory: 'Select Category...',
+            placeholderBrand: 'Select Brand...'
+        });
+        {% endfor %}
+    });
+</script>
+{% endblock %}

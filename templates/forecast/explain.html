@@ -1,0 +1,444 @@
+{% extends "base.html" %}
+
+{% block title %}SHAP Explainable AI - {{ product.name }}{% endblock %}
+{% block header_title %}Explainable AI (SHAP) - {{ product.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ── Prediction Summary Strip ───────────────────────────── */
+    .shap-summary-strip {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .shap-summary-strip .stat-box {
+        flex: 1 1 160px;
+        background: var(--bg-card, #fff);
+        border: 1px solid var(--border-subtle, #E5E7EB);
+        border-radius: 12px;
+        padding: 1.1rem 1.25rem;
+        text-align: center;
+        box-shadow: var(--shadow-sm);
+    }
+    .stat-box .stat-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-secondary, #374151);
+        margin-bottom: 0.3rem;
+    }
+    .stat-box .stat-value {
+        font-size: 1.65rem;
+        font-weight: 700;
+        color: var(--text-primary, #111827);
+    }
+    .stat-box .stat-value.text-danger { color: #EF4444 !important; }
+    .stat-box .stat-value.text-success { color: #22C55E !important; }
+    .stat-box .stat-value.text-warning { color: #F59E0B !important; }
+
+    /* ── Factor Cards ───────────────────────────────────────── */
+    .shap-factors-scroll {
+        max-height: 420px;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+    .shap-factors-scroll::-webkit-scrollbar { width: 5px; }
+    .shap-factors-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+
+    .factor-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.85rem 1rem;
+        border-radius: 10px;
+        margin-bottom: 0.5rem;
+        transition: background 0.15s;
+    }
+    .factor-item:hover { filter: brightness(0.97); }
+    .factor-item.positive { background: rgba(34,197,94,0.06); border-left: 3px solid #22C55E; }
+    .factor-item.negative { background: rgba(239,68,68,0.06); border-left: 3px solid #EF4444; }
+    .factor-icon {
+        font-size: 1.15rem;
+        margin-top: 2px;
+        flex-shrink: 0;
+        width: 24px;
+        text-align: center;
+    }
+    .factor-body { flex: 1; min-width: 0; }
+    .factor-name {
+        font-weight: 600;
+        font-size: 0.92rem;
+        color: var(--text-primary, #111827);
+    }
+    .factor-direction {
+        font-size: 0.78rem;
+        font-weight: 600;
+        margin-top: 1px;
+    }
+    .factor-direction.up { color: #16A34A; }
+    .factor-direction.down { color: #DC2626; }
+    .factor-explanation {
+        font-size: 0.82rem;
+        color: var(--text-secondary, #374151);
+        margin-top: 3px;
+        line-height: 1.45;
+    }
+    .factor-shap-badge {
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 6px;
+        white-space: nowrap;
+        margin-top: 3px;
+        display: inline-block;
+    }
+    .factor-shap-badge.pos { background: rgba(34,197,94,0.12); color: #15803D; }
+    .factor-shap-badge.neg { background: rgba(239,68,68,0.12); color: #B91C1C; }
+
+    /* ── Conclusion Box ─────────────────────────────────────── */
+    .conclusion-box {
+        background: linear-gradient(135deg, rgba(37,99,235,0.06) 0%, rgba(139,92,246,0.06) 100%);
+        border: 1px solid rgba(37,99,235,0.15);
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+    }
+    .conclusion-box p {
+        color: var(--text-primary, #111827);
+        font-size: 0.9rem;
+        line-height: 1.6;
+        margin: 0;
+        font-weight: 500;
+    }
+
+    /* ── SHAP Bar Visualization ──────────────────────────────── */
+    .shap-bar-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.55rem;
+        font-size: 0.82rem;
+    }
+    .shap-bar-label {
+        width: 140px;
+        text-align: right;
+        font-weight: 600;
+        color: var(--text-primary, #111827);
+        flex-shrink: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .shap-bar-track {
+        flex: 1;
+        height: 20px;
+        background: var(--bg-page, #F8FAFC);
+        border-radius: 4px;
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--border-subtle, #E5E7EB);
+    }
+    .shap-bar-fill {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.6s ease;
+    }
+    .shap-bar-fill.pos { background: #22C55E; left: 50%; }
+    .shap-bar-fill.neg { background: #EF4444; right: 50%; }
+    .shap-bar-center {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: #64748b;
+    }
+    .shap-bar-value {
+        width: 64px;
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.78rem;
+        flex-shrink: 0;
+    }
+    .shap-bar-value.pos { color: #16A34A; }
+    .shap-bar-value.neg { color: #DC2626; }
+
+    /* ── Info/Help Card ──────────────────────────────────────── */
+    .shap-info-card {
+        background: rgba(37,99,235,0.04);
+        border: 1px solid rgba(37,99,235,0.12);
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        font-size: 0.84rem;
+        color: var(--text-secondary, #374151);
+        line-height: 1.55;
+    }
+    .shap-info-card strong {
+        color: var(--text-primary, #111827);
+    }
+
+    /* ── Section titles ──────────────────────────────────────── */
+    .shap-section-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text-primary, #111827) !important;
+        margin-bottom: 0.75rem;
+    }
+
+    /* ── Responsive ──────────────────────────────────────────── */
+    @media (max-width: 768px) {
+        .shap-bar-label { width: 100px; font-size: 0.75rem; }
+        .shap-bar-value { width: 52px; font-size: 0.72rem; }
+        .shap-summary-strip { gap: 0.5rem; }
+        .stat-box .stat-value { font-size: 1.3rem; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{# ── Page Header ─────────────────────────────────────────── #}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h4 class="fw-bold mb-1" style="color: #111827 !important; font-weight: 700 !important;">
+            <i class="fa-solid fa-lightbulb text-warning me-2"></i> SHAP Prediction Explanation
+        </h4>
+        <p class="small mb-0" style="color: #374151;">Feature attribution model for product: <strong style="color: #111827;">{{ product.name }}</strong> ({{ product.product_id_str }})</p>
+    </div>
+    <a href="{{ url_for('forecast.index', product_id=product.id) }}" class="btn btn-outline-secondary">
+        <i class="fa-solid fa-arrow-left me-1"></i> Back to AI Forecasts
+    </a>
+</div>
+
+{# ── 1. Prediction Summary Strip ────────────────────────── #}
+{% set stock = shap_analysis.current_stock|default(product.current_stock|float) %}
+{% set demand = shap_analysis.predicted_demand|default(predicted_demand) %}
+{% set reorder = shap_analysis.reorder_level|default(product.reorder_level|float) %}
+{% if stock <= reorder %}
+    {% set stock_status = 'Critical' %}
+    {% set stock_color = 'text-danger' %}
+    {% set stock_badge = 'bg-danger' %}
+{% elif stock < demand %}
+    {% set stock_status = 'Low' %}
+    {% set stock_color = 'text-warning' %}
+    {% set stock_badge = 'bg-warning' %}
+{% else %}
+    {% set stock_status = 'Sufficient' %}
+    {% set stock_color = 'text-success' %}
+    {% set stock_badge = 'bg-success' %}
+{% endif %}
+
+<div class="shap-summary-strip mb-4">
+    <div class="stat-box">
+        <div class="stat-label">Predicted Demand</div>
+        <div class="stat-value" style="color: var(--brand);">{{ '%.0f'|format(demand) }} <small style="font-size:0.55em; font-weight:500;">units</small></div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-label">Current Stock</div>
+        <div class="stat-value {{ stock_color }}">{{ '%.0f'|format(stock) }} <small style="font-size:0.55em; font-weight:500;">units</small></div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-label">Reorder Level</div>
+        <div class="stat-value">{{ '%.0f'|format(reorder) }} <small style="font-size:0.55em; font-weight:500;">units</small></div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-label">Stock Status</div>
+        <div><span class="badge {{ stock_badge }} px-3 py-2 mt-1" style="font-size: 0.85rem;">{{ stock_status }}</span></div>
+    </div>
+</div>
+
+{# ── 2. Why Did the AI Predict This? ────────────────────── #}
+<div class="row g-4 mb-4">
+    <div class="col-12 col-lg-7">
+        <div class="card card-stats p-4" style="height: auto;">
+            <h5 class="shap-section-title">
+                <i class="fa-solid fa-brain text-primary me-2"></i> Why Did the AI Predict {{ '%.0f'|format(demand) }} Units?
+            </h5>
+            <div class="shap-factors-scroll">
+                {# Negative factors first (decreasing demand) #}
+                {% if shap_analysis.negative_factors %}
+                <div class="mb-2">
+                    <small class="text-uppercase fw-bold" style="color: #DC2626; font-size: 0.72rem; letter-spacing: 0.05em;">
+                        <i class="fa-solid fa-arrow-trend-down me-1"></i> Factors Decreasing Demand
+                    </small>
+                </div>
+                {% for f in shap_analysis.negative_factors %}
+                <div class="factor-item negative">
+                    <div class="factor-icon" style="color: #EF4444;">🔻</div>
+                    <div class="factor-body">
+                        <div class="factor-name">{{ f.feature }}</div>
+                        <div class="factor-direction down">Decreased the demand prediction</div>
+                        <div class="factor-explanation">{{ f.plain_explanation }}</div>
+                        <span class="factor-shap-badge neg">SHAP: {{ '%+.2f'|format(f.shap_value) }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+                {% endif %}
+
+                {# Positive factors (increasing demand) #}
+                {% if shap_analysis.positive_factors %}
+                <div class="mb-2 {% if shap_analysis.negative_factors %}mt-3{% endif %}">
+                    <small class="text-uppercase fw-bold" style="color: #16A34A; font-size: 0.72rem; letter-spacing: 0.05em;">
+                        <i class="fa-solid fa-arrow-trend-up me-1"></i> Factors Increasing Demand
+                    </small>
+                </div>
+                {% for f in shap_analysis.positive_factors %}
+                <div class="factor-item positive">
+                    <div class="factor-icon" style="color: #22C55E;">🟢</div>
+                    <div class="factor-body">
+                        <div class="factor-name">{{ f.feature }}</div>
+                        <div class="factor-direction up">Increased the demand prediction</div>
+                        <div class="factor-explanation">{{ f.plain_explanation }}</div>
+                        <span class="factor-shap-badge pos">SHAP: {{ '%+.2f'|format(f.shap_value) }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+                {% endif %}
+
+                {% if not shap_analysis.negative_factors and not shap_analysis.positive_factors %}
+                <p class="text-muted mb-0">No SHAP factor data available for this product.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ── 3. AI Prediction Factors (Visual Bar Chart) ─────── #}
+    <div class="col-12 col-lg-5">
+        <div class="card card-stats p-4" style="height: auto;">
+            <h5 class="shap-section-title">
+                <i class="fa-solid fa-chart-bar text-primary me-2"></i> AI Prediction Factors
+            </h5>
+
+            {% if shap_analysis.feature_contributions %}
+            {% set max_abs = [] %}
+            {% for fc in shap_analysis.feature_contributions %}
+                {% if max_abs.append(fc.shap_value|abs) %}{% endif %}
+            {% endfor %}
+            {% set max_shap = max_abs|max if max_abs else 1 %}
+
+            {% for fc in shap_analysis.feature_contributions %}
+            {% set pct = ((fc.shap_value|abs) / max_shap * 48)|round|int %}
+            {% set is_pos = fc.shap_value >= 0 %}
+            <div class="shap-bar-row">
+                <div class="shap-bar-label" title="{{ fc.feature }}">{{ fc.feature }}</div>
+                <div class="shap-bar-track">
+                    <div class="shap-bar-center"></div>
+                    {% if is_pos %}
+                    <div class="shap-bar-fill pos" style="width: {{ pct }}%;"></div>
+                    {% else %}
+                    <div class="shap-bar-fill neg" style="width: {{ pct }}%; left: auto; right: 50%;"></div>
+                    {% endif %}
+                </div>
+                <div class="shap-bar-value {{ 'pos' if is_pos else 'neg' }}">{{ '%+.2f'|format(fc.shap_value) }}</div>
+            </div>
+            {% endfor %}
+
+            <div class="mt-3 pt-2 border-top" style="border-color: var(--border-subtle) !important;">
+                <small style="color: var(--text-secondary); font-size: 0.76rem;">
+                    <i class="fa-solid fa-circle text-success me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> Green = increases predicted demand
+                    &nbsp;&nbsp;
+                    <i class="fa-solid fa-circle text-danger me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> Red = decreases predicted demand
+                </small>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">No SHAP visualization data available.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# ── 4. AI Conclusion ───────────────────────────────────── #}
+{% if shap_analysis.conclusion_text %}
+<div class="conclusion-box mb-4">
+    <div class="d-flex align-items-start gap-2">
+        <i class="fa-solid fa-robot text-primary mt-1" style="font-size: 1.1rem;"></i>
+        <div>
+            <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); margin-bottom: 0.3rem;">AI Conclusion</div>
+            <p>{{ shap_analysis.conclusion_text }}</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── 5. Technical Details (Collapsible) ─────────────────── #}
+<div class="card card-stats mb-4" style="height: auto;">
+    <div class="p-3">
+        <a class="d-flex align-items-center justify-content-between text-decoration-none" data-bs-toggle="collapse" href="#technicalDetails" role="button" aria-expanded="false" aria-controls="technicalDetails">
+            <h6 class="fw-bold mb-0" style="color: var(--text-primary) !important; font-weight: 700 !important;">
+                <i class="fa-solid fa-code text-secondary me-2"></i> Technical Details
+            </h6>
+            <i class="fa-solid fa-chevron-down text-secondary" style="transition: transform 0.2s;"></i>
+        </a>
+    </div>
+    <div class="collapse" id="technicalDetails">
+        <div class="px-3 pb-3">
+            <div class="row g-4">
+                {# SHAP Summary Plot #}
+                <div class="col-12 col-lg-7">
+                    <h6 class="fw-bold mb-2" style="color: var(--text-primary) !important; font-size: 0.9rem;">
+                        <i class="fa-solid fa-chart-bar text-primary me-2"></i> SHAP Summary Plot
+                    </h6>
+                    {% if shap_analysis.summary_plot_b64 %}
+                    <img src="data:image/png;base64,{{ shap_analysis.summary_plot_b64 }}" class="img-fluid rounded border border-secondary" alt="SHAP Plot" style="background: white;">
+                    {% else %}
+                    <div class="py-4 text-center" style="color: var(--text-secondary);">
+                        <i class="fa-solid fa-chart-line fs-1 mb-2"></i>
+                        <div>Feature importance matrix generated successfully.</div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {# Feature Contribution Table #}
+                <div class="col-12 col-lg-5">
+                    <h6 class="fw-bold mb-2" style="color: var(--text-primary) !important; font-size: 0.9rem;">
+                        <i class="fa-solid fa-list-check text-primary me-2"></i> Feature Importance Matrix
+                    </h6>
+                    <div class="table-responsive">
+                        <table class="table table-custom mb-0 align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="color: #111827 !important; font-weight: 600;">Feature</th>
+                                    <th style="color: #111827 !important; font-weight: 600;">Value</th>
+                                    <th style="color: #111827 !important; font-weight: 600;">SHAP Impact</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for fc in shap_analysis.feature_contributions %}
+                                <tr>
+                                    <td class="fw-bold" style="color: #111827 !important; font-weight: 600 !important;">{{ fc.feature }}</td>
+                                    <td><span style="color: #374151;">{{ fc.value }}</span></td>
+                                    <td>
+                                        <span class="badge {% if fc.shap_value >= 0 %}bg-success{% else %}bg-danger{% endif %} px-2 py-1">
+                                            {% if fc.shap_value >= 0 %}+{% endif %}{{ fc.shap_value }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-3 pt-2 border-top" style="border-color: #E5E7EB !important; color: #374151; font-size: 0.82rem;">
+                        <i class="fa-solid fa-circle-info me-1" style="color: var(--brand);"></i>
+                        Positive SHAP values increase predicted demand; negative values reduce it.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── 6. What is SHAP? ──────────────────────────────────── #}
+<div class="shap-info-card mb-2">
+    <div class="d-flex align-items-start gap-2">
+        <i class="fa-solid fa-circle-question mt-1" style="color: var(--brand); font-size: 1rem;"></i>
+        <div>
+            <strong>What is SHAP?</strong><br>
+            SHAP (SHapley Additive exPlanations) explains how much each input factor influenced the AI's demand prediction.
+            Instead of showing only the final predicted number, SHAP breaks down <em>why</em> the model arrived at that prediction —
+            revealing which factors pushed demand higher and which pulled it lower. This makes the AI transparent and trustworthy,
+            so you can make informed inventory decisions.
+        </div>
+    </div>
+</div>
+{% endblock %}

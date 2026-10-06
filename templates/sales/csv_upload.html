@@ -1,0 +1,414 @@
+{% extends "base.html" %}
+
+{% block title %}Upload CSV Sales - Smart Inventory AI{% endblock %}
+{% block header_title %}Batch Import Historical Sales CSV{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+        <div class="card card-stats p-4 p-md-5">
+            <div class="text-center mb-4">
+                <div class="icon-box icon-blue mx-auto mb-3" style="width: 60px; height: 60px; font-size: 1.8rem;">
+                    <i class="fa-solid fa-file-csv"></i>
+                </div>
+                <h4 class="page-title-responsive mb-2">Batch Import Sales Data</h4>
+                <p class="text-secondary small">Upload historical sales CSV files to populate demand data for PatchTST forecasting</p>
+            </div>
+
+            <!-- Upload Guidelines Box -->
+            <div class="p-3 bg-light border border-secondary rounded mb-4 shadow-sm">
+                <h6 class="fw-bold text-dark mb-2"><i class="fa-solid fa-circle-info me-2 text-primary"></i> File Requirements & Schema Validation</h6>
+                <ul class="text-secondary small fw-semibold mb-0 ps-3">
+                    <li>Must be a valid <strong>.csv</strong> file format.</li>
+                    <li>Required Column Headers: <code class="text-warning">product_id_str,sale_date,quantity_sold</code></li>
+                    <li>Date format must be <code>YYYY-MM-DD</code> (e.g. <code>2026-04-15</code>).</li>
+                    <li>Quantity must be a non-negative number.</li>
+                    <li>Rows with missing values or invalid product codes will be safely skipped.</li>
+                    <li>Duplicate entries are automatically detected and omitted to prevent double-counting.</li>
+                </ul>
+            </div>
+
+            <!-- CSV Upload Form -->
+            <form id="csvUploadForm" enctype="multipart/form-data">
+                <div class="mb-4">
+                    <label for="csvFile" class="form-label text-secondary small fw-bold">CHOOSE CSV FILE *</label>
+                    <input type="file" name="file" id="csvFile" class="form-control form-control-custom" accept=".csv" required>
+                    <div id="fileInfo" class="mt-2 small text-secondary" style="display: none;"></div>
+                </div>
+
+                <!-- Progress Section (hidden initially) -->
+                <div id="uploadProgress" class="mb-4" style="display: none;">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <div id="progressSpinner" class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Processing...</span>
+                        </div>
+                        <span id="progressText" class="small fw-semibold text-primary">Preparing upload...</span>
+                    </div>
+                    <div class="progress" style="height: 6px;">
+                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Results Section (hidden initially) -->
+                <div id="uploadResults" class="mb-4" style="display: none;"></div>
+
+                <div class="d-flex gap-3">
+                    <a href="{{ url_for('sales.index') }}" class="btn btn-secondary w-50 py-2" id="btnBack">
+                        <i class="fa-solid fa-arrow-left me-1"></i> Back to Sales
+                    </a>
+                    <button type="submit" class="btn btn-primary fw-bold w-50 py-2" id="btnUpload">
+                        <i class="fa-solid fa-cloud-arrow-up me-1"></i> Upload & Process CSV
+                    </button>
+                </div>
+            </form>
+
+            <div class="mt-4 pt-3 border-top border-secondary text-center">
+                <a href="{{ url_for('sales.download_template') }}" id="btnDownloadTemplate" class="btn btn-sm btn-outline-secondary" download="sample_upload_format.csv" role="button">
+                    <i class="fa-solid fa-download me-1"></i> Download Sample CSV Template
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // ── Sample CSV Template Download (Instant Client-side Blob + Fallback) ──
+    const btnDownloadTemplate = document.getElementById('btnDownloadTemplate');
+    if (btnDownloadTemplate) {
+        btnDownloadTemplate.addEventListener('click', function(e) {
+            e.preventDefault();
+            const csvRows = [
+                'product_id_str,sale_date,quantity_sold',
+                'PRD-1001,2026-04-01,15',
+                'PRD-1001,2026-04-02,18',
+                'PRD-1001,2026-04-03,12',
+                'PRD-1001,2026-04-04,22',
+                'PRD-1001,2026-04-05,25',
+                'PRD-1002,2026-04-01,5',
+                'PRD-1002,2026-04-02,8',
+                'PRD-1002,2026-04-03,6',
+                'PRD-1003,2026-04-01,40',
+                'PRD-1003,2026-04-02,45',
+                'PRD-1004,2026-04-01,10',
+                'PRD-1004,2026-04-02,12',
+                'PRD-1005,2026-04-01,3',
+                'PRD-1005,2026-04-02,4'
+            ];
+            const csvString = '\uFEFF' + csvRows.join('\r\n') + '\r\n';
+            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+            const downloadUrl = URL.createObjectURL(blob);
+            const tempLink = document.createElement('a');
+            tempLink.href = downloadUrl;
+            tempLink.setAttribute('download', 'historical_sales_template.csv');
+            tempLink.style.display = 'none';
+            document.body.appendChild(tempLink);
+            tempLink.click();
+            document.body.removeChild(tempLink);
+            setTimeout(function() { URL.revokeObjectURL(downloadUrl); }, 1000);
+        });
+    }
+    const form = document.getElementById('csvUploadForm');
+    const fileInput = document.getElementById('csvFile');
+    const fileInfo = document.getElementById('fileInfo');
+    const btnUpload = document.getElementById('btnUpload');
+    const btnBack = document.getElementById('btnBack');
+    const progressSection = document.getElementById('uploadProgress');
+    const progressSpinner = document.getElementById('progressSpinner');
+    const progressText = document.getElementById('progressText');
+    const progressBar = document.getElementById('progressBar');
+    const resultsSection = document.getElementById('uploadResults');
+
+    // ── File selection feedback ──────────────────────────────────
+    fileInput.addEventListener('change', function() {
+        resultsSection.style.display = 'none';
+        resultsSection.innerHTML = '';
+
+        if (this.files && this.files.length > 0) {
+            const file = this.files[0];
+            const sizeKB = (file.size / 1024).toFixed(1);
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            const sizeStr = file.size > 1024 * 1024 ? `${sizeMB} MB` : `${sizeKB} KB`;
+
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                fileInfo.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-danger me-1"></i> <strong class="text-danger">${file.name}</strong> — Invalid file type. Only .csv files are accepted.`;
+                fileInfo.style.display = 'block';
+                btnUpload.disabled = true;
+                return;
+            }
+
+            fileInfo.innerHTML = `<i class="fa-solid fa-file-csv text-success me-1"></i> <strong>${file.name}</strong> (${sizeStr}) — Ready to upload`;
+            fileInfo.style.display = 'block';
+            btnUpload.disabled = false;
+        } else {
+            fileInfo.style.display = 'none';
+            btnUpload.disabled = false;
+        }
+    });
+
+    // ── Helper: update progress stage ────────────────────────────
+    function setProgress(text, percent) {
+        progressText.textContent = text;
+        progressBar.style.width = percent + '%';
+    }
+
+    // ── Helper: show final state (hide spinner) ──────────────────
+    function showComplete(text, isSuccess) {
+        progressSpinner.style.display = 'none';
+        progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+        progressBar.style.width = '100%';
+
+        if (isSuccess) {
+            progressBar.classList.remove('bg-danger');
+            progressBar.classList.add('bg-success');
+            progressText.className = 'small fw-semibold text-success';
+        } else {
+            progressBar.classList.remove('bg-success');
+            progressBar.classList.add('bg-danger');
+            progressText.className = 'small fw-semibold text-danger';
+        }
+        progressText.textContent = text;
+    }
+
+    // ── Helper: reset UI for another upload ──────────────────────
+    function resetUI() {
+        btnUpload.disabled = false;
+        btnUpload.innerHTML = '<i class="fa-solid fa-cloud-arrow-up me-1"></i> Upload & Process CSV';
+        btnBack.classList.remove('disabled');
+        fileInput.disabled = false;
+    }
+
+    // ── Helper: build results card ───────────────────────────────
+    function buildResultsHTML(data) {
+        const s = data.summary;
+        let html = '';
+
+        if (data.success) {
+            if (s.inserted > 0) {
+                html += `<div class="alert alert-success border-0 shadow-sm mb-3">
+                    <h6 class="fw-bold mb-2"><i class="fa-solid fa-circle-check me-2"></i>Import Completed Successfully</h6>
+                    <div class="small">Successfully imported <strong>${s.inserted.toLocaleString()}</strong> of <strong>${s.total_rows.toLocaleString()}</strong> rows into the sales database.</div>
+                </div>`;
+            } else if (s.db_duplicates === s.total_rows && s.total_rows > 0) {
+                html += `<div class="alert alert-warning border-0 shadow-sm mb-3">
+                    <h6 class="fw-bold mb-2"><i class="fa-solid fa-triangle-exclamation me-2"></i>No New Records Imported</h6>
+                    <div class="small">All <strong>${s.total_rows.toLocaleString()}</strong> rows in this CSV file already exist in the sales database. Duplicate transactions were skipped to avoid double-counting.</div>
+                </div>`;
+            } else {
+                html += `<div class="alert alert-danger border-0 shadow-sm mb-3">
+                    <h6 class="fw-bold mb-2"><i class="fa-solid fa-circle-xmark me-2"></i>Import Failed — 0 Valid Records Imported</h6>
+                    <div class="small">None of the <strong>${s.total_rows.toLocaleString()}</strong> rows in your file could be imported. Please review the error breakdown below.</div>
+                </div>`;
+            }
+        } else {
+            html += `<div class="alert alert-danger border-0 shadow-sm mb-3">
+                <h6 class="fw-bold mb-2"><i class="fa-solid fa-circle-xmark me-2"></i>Import Failed</h6>
+                <div class="small">${data.error || 'An unknown error occurred.'}</div>
+            </div>`;
+            return html;
+        }
+
+        // ── Detailed stats table ─────────────────────────────────
+        html += `<div class="table-responsive">
+            <table class="table table-sm table-bordered mb-3" style="font-size: 0.85rem;">
+                <tbody>
+                    <tr class="table-light">
+                        <td class="fw-bold"><i class="fa-solid fa-list-ol me-1 text-secondary"></i> Total Rows in CSV</td>
+                        <td class="text-end fw-bold">${s.total_rows.toLocaleString()}</td>
+                    </tr>
+                    <tr class="${s.inserted > 0 ? 'table-success' : ''}">
+                        <td class="fw-bold"><i class="fa-solid fa-circle-check me-1 ${s.inserted > 0 ? 'text-success' : 'text-muted'}"></i> Successfully Imported</td>
+                        <td class="text-end fw-bold ${s.inserted > 0 ? 'text-success' : 'text-muted'}">${s.inserted.toLocaleString()}</td>
+                    </tr>`;
+
+        if (s.skipped > 0) {
+            html += `<tr class="table-warning">
+                        <td class="fw-bold"><i class="fa-solid fa-forward me-1 text-warning"></i> Total Skipped</td>
+                        <td class="text-end fw-bold text-warning">${s.skipped.toLocaleString()}</td>
+                    </tr>`;
+        }
+        if (s.db_duplicates > 0) {
+            html += `<tr>
+                        <td class="ps-4 text-secondary">↳ Already exist in database (duplicates)</td>
+                        <td class="text-end text-secondary fw-semibold">${s.db_duplicates.toLocaleString()}</td>
+                    </tr>`;
+        }
+        if (s.csv_duplicates > 0) {
+            html += `<tr>
+                        <td class="ps-4 text-secondary">↳ Duplicate rows within CSV file</td>
+                        <td class="text-end text-secondary">${s.csv_duplicates.toLocaleString()}</td>
+                    </tr>`;
+        }
+        if (s.invalid_product_ids > 0) {
+            html += `<tr>
+                        <td class="ps-4 text-danger">↳ Unrecognized product IDs</td>
+                        <td class="text-end text-danger fw-bold">${s.invalid_product_ids.toLocaleString()}</td>
+                    </tr>`;
+        }
+        if (s.invalid_dates > 0) {
+            html += `<tr>
+                        <td class="ps-4 text-danger">↳ Invalid date format</td>
+                        <td class="text-end text-danger fw-bold">${s.invalid_dates.toLocaleString()}</td>
+                    </tr>`;
+        }
+        if (s.invalid_quantities > 0) {
+            html += `<tr>
+                        <td class="ps-4 text-danger">↳ Invalid quantities</td>
+                        <td class="text-end text-danger fw-bold">${s.invalid_quantities.toLocaleString()}</td>
+                    </tr>`;
+        }
+        if (s.missing_values > 0) {
+            html += `<tr>
+                        <td class="ps-4 text-danger">↳ Missing required values</td>
+                        <td class="text-end text-danger fw-bold">${s.missing_values.toLocaleString()}</td>
+                    </tr>`;
+        }
+
+        html += `<tr class="table-light">
+                        <td class="fw-bold"><i class="fa-solid fa-boxes-stacked me-1 text-info"></i> Products Affected</td>
+                        <td class="text-end fw-bold">${s.affected_products.toLocaleString()}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>`;
+
+        // ── Rejected row details table ───────────────────────────
+        if (data.rejection_details && data.rejection_details.length > 0) {
+            html += `<div class="card p-3 border-danger bg-danger bg-opacity-10 mb-3">
+                <h6 class="fw-bold text-danger mb-2"><i class="fa-solid fa-triangle-exclamation me-1"></i> Row Rejection Details (${data.rejection_details.length} row${data.rejection_details.length > 1 ? 's' : ''})</h6>
+                <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0 bg-white rounded" style="font-size: 0.82rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 75px;">Row</th>
+                                <th style="width: 110px;">Field</th>
+                                <th style="width: 130px;">CSV Value</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+            data.rejection_details.forEach(r => {
+                html += `<tr>
+                    <td class="fw-bold text-secondary">Row ${r.row}</td>
+                    <td><code>${r.field}</code></td>
+                    <td class="text-truncate" style="max-width: 130px;"><code>${r.value || '(empty)'}</code></td>
+                    <td class="text-danger">${r.reason}</td>
+                </tr>`;
+            });
+            html += `</tbody>
+                    </table>
+                </div>
+            </div>`;
+        }
+
+        // ── Sample valid product IDs guidance ────────────────────
+        if (data.sample_valid_pids && data.sample_valid_pids.length > 0 && s.invalid_product_ids > 0) {
+            html += `<div class="alert alert-info border-0 py-2 px-3 small mb-3">
+                <strong><i class="fa-solid fa-circle-info me-1"></i>Valid Product Codes in your Inventory Catalog:</strong>
+                <div class="mt-1"><code>${data.sample_valid_pids.join(', ')}</code></div>
+            </div>`;
+        }
+
+        // ── Navigation links ─────────────────────────────────────
+        html += `<div class="d-flex gap-2 flex-wrap mt-3">
+            <a href="{{ url_for('sales.history') }}" class="btn btn-sm btn-outline-primary fw-semibold">
+                <i class="fa-solid fa-clock-rotate-left me-1"></i> View Sales History
+            </a>
+            <a href="{{ url_for('forecast.index') }}" class="btn btn-sm btn-outline-secondary fw-semibold">
+                <i class="fa-solid fa-chart-line me-1"></i> Retrain Forecasts
+            </a>
+        </div>`;
+
+        return html;
+    }
+
+    // ── Form submission handler ──────────────────────────────────
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const file = fileInput.files[0];
+        if (!file) {
+            fileInfo.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-warning me-1"></i> Please select a CSV file first.';
+            fileInfo.style.display = 'block';
+            return;
+        }
+
+        if (!file.name.toLowerCase().endsWith('.csv')) {
+            fileInfo.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-danger me-1"></i> Invalid file type. Only .csv files are accepted.';
+            fileInfo.style.display = 'block';
+            return;
+        }
+
+        // ── Lock UI ──────────────────────────────────────────────
+        btnUpload.disabled = true;
+        btnUpload.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span> Processing...';
+        btnBack.classList.add('disabled');
+        fileInput.disabled = true;
+        resultsSection.style.display = 'none';
+        resultsSection.innerHTML = '';
+
+        // ── Show progress ────────────────────────────────────────
+        progressSection.style.display = 'block';
+        progressSpinner.style.display = '';
+        progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-primary';
+        progressText.className = 'small fw-semibold text-primary';
+        setProgress('Uploading CSV file...', 15);
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // ── Start upload with progress stages ────────────────────
+        const uploadTimer = setTimeout(() => setProgress('Validating and processing records...', 40), 1500);
+        const processTimer = setTimeout(() => setProgress('Importing records into database...', 65), 4000);
+        const longTimer = setTimeout(() => setProgress('Still processing — large file, please wait...', 80), 15000);
+
+        fetch("{{ url_for('sales.upload_csv') }}", {
+            method: 'POST',
+            body: formData,
+        })
+        .then(response => {
+            clearTimeout(uploadTimer);
+            clearTimeout(processTimer);
+            clearTimeout(longTimer);
+
+            setProgress('Receiving response...', 90);
+            return response.json().then(data => ({ ok: response.ok, status: response.status, data }));
+        })
+        .then(({ ok, status, data }) => {
+            if (data.success) {
+                const cnt = data.summary.inserted;
+                if (cnt > 0) {
+                    showComplete(`Import complete — ${cnt.toLocaleString()} record${cnt !== 1 ? 's' : ''} imported.`, true);
+                } else if (data.summary.db_duplicates === data.summary.total_rows && data.summary.total_rows > 0) {
+                    showComplete(`No new records imported — all ${data.summary.total_rows.toLocaleString()} rows already exist in database.`, false);
+                } else {
+                    showComplete('Import failed — 0 valid records were imported.', false);
+                }
+            } else {
+                showComplete('Import failed — see details below.', false);
+            }
+
+            resultsSection.innerHTML = buildResultsHTML(data);
+            resultsSection.style.display = 'block';
+            resetUI();
+        })
+        .catch(err => {
+            clearTimeout(uploadTimer);
+            clearTimeout(processTimer);
+            clearTimeout(longTimer);
+
+            console.error('CSV upload error:', err);
+            showComplete('Upload failed — network or server error.', false);
+
+            resultsSection.innerHTML = `<div class="alert alert-danger border-0 shadow-sm">
+                <h6 class="fw-bold mb-1"><i class="fa-solid fa-circle-xmark me-2"></i>Upload Error</h6>
+                <div class="small">Could not complete the upload. Please check your network connection and try again.</div>
+                <div class="small text-muted mt-1">${err.message || 'Unknown error'}</div>
+            </div>`;
+            resultsSection.style.display = 'block';
+            resetUI();
+        });
+    });
+})();
+</script>
+{% endblock %}

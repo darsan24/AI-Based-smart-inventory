@@ -1,0 +1,458 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory Stock - Smart Inventory AI{% endblock %}
+{% block header_title %}Inventory Operations & Stock Adjustments{% endblock %}
+
+{% block content %}
+<!-- Low Stock Warning Banner -->
+{% if low_stock_products %}
+<div class="alert bg-danger bg-opacity-10 border-0 border-start border-danger border-4 p-4 mb-4 shadow-sm rounded-3">
+    <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div class="icon-box bg-white text-danger shadow-sm border" style="width: 48px; height: 48px; min-width: 48px;">
+                <i class="fa-solid fa-triangle-exclamation fs-4"></i>
+            </div>
+            <div>
+                <h5 class="fw-bold text-dark mb-1">
+                    Low Stock Alert
+                </h5>
+                <p class="text-secondary mb-0 small">
+                    "The highlighted products have reached or fallen below their configured reorder level. Please restock these products immediately."
+                </p>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-danger btn-sm fw-bold text-nowrap" onclick="filterLowStockRows()">
+                <i class="fa-solid fa-eye me-1"></i> View Low Stock
+            </button>
+            <button class="btn btn-danger btn-sm fw-bold text-nowrap" data-bs-toggle="modal" data-bs-target="#stockInModal">
+                <i class="fa-solid fa-plus me-1"></i> Quick Stock In
+            </button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card p-4 border-0 shadow-sm mb-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div>
+            <h4 class="fw-bold text-dark mb-0"><i class="fa-solid fa-warehouse text-primary me-2"></i> Inventory Control Panel</h4>
+            <p class="text-secondary small mb-0 mt-1">Manage Stock In, Stock Out, and manual balance adjustments</p>
+        </div>
+        
+        <div class="d-flex gap-3 align-items-center">
+            <button class="btn btn-brand" data-bs-toggle="modal" data-bs-target="#stockInModal">
+                <i class="fa-solid fa-arrow-down me-1"></i> Stock In
+            </button>
+            <button class="btn btn-secondary-custom" data-bs-toggle="modal" data-bs-target="#stockOutModal">
+                <i class="fa-solid fa-arrow-up me-1 text-danger"></i> Stock Out
+            </button>
+            <button class="btn btn-secondary-custom" data-bs-toggle="modal" data-bs-target="#modifyModal">
+                <i class="fa-solid fa-sliders me-1 text-secondary"></i> Adjust
+            </button>
+        </div>
+    </div>
+
+    <!-- Advanced Filters -->
+    <div class="row g-2 mb-4 bg-light p-3 rounded-3 border">
+        <div class="col-6 col-md-2">
+            <input type="text" id="searchInput" class="form-control bg-white" placeholder="Search..." onkeyup="applyFilters()">
+        </div>
+        <div class="col-6 col-md-2">
+            <select id="productTypeFilter" class="form-select bg-white">
+                <option value="">All Types</option>
+                {% for p in products|map(attribute='product_type')|unique|sort %}
+                {% if p %}
+                <option value="{{ p }}">{{ p }}</option>
+                {% endif %}
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <select id="categoryFilter" class="form-select bg-white">
+                <option value="">All Categories</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <select id="brandFilter" class="form-select bg-white">
+                <option value="">All Brands</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <select id="statusFilter" class="form-select bg-white" onchange="applyFilters()">
+                <option value="">All Statuses</option>
+                <option value="in_stock">In Stock</option>
+                <option value="low_stock">Low Stock</option>
+                <option value="out_of_stock">Out of Stock</option>
+            </select>
+        </div>
+        <div class="col-12 col-md-2 d-flex gap-2">
+            <button class="btn btn-outline-secondary w-100 fw-semibold" onclick="resetFilters()">
+                <i class="fa-solid fa-rotate-right me-1"></i> Reset
+            </button>
+        </div>
+    </div>
+
+    <!-- Inventory Table -->
+    <div class="table-custom-wrapper">
+        <div class="table-responsive">
+            <table class="table table-custom mb-0 align-middle" id="inventoryTable">
+                <thead>
+                    <tr>
+                        <th>Product Info</th>
+                        <th>Type & Brand</th>
+                        <th>Stock Status</th>
+                        <th>Current / Reorder</th>
+                        <th class="text-end">Quick Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in products %}
+                    <tr class="inventory-row" 
+                        data-name="{{ p.name|lower }}" 
+                        data-code="{{ p.product_id_str|lower }}"
+                        data-type="{{ p.product_type }}"
+                        data-category="{{ p.category }}"
+                        data-brand="{{ p.brand }}"
+                        data-status="{% if p.current_stock == 0 %}out_of_stock{% elif p.current_stock <= p.reorder_level %}low_stock{% else %}in_stock{% endif %}">
+                        
+                        <td style="min-width: 250px;">
+                            <div class="d-flex align-items-center gap-3">
+                                <div>
+                                    <div class="product-name-title fw-bold text-dark mb-1">{{ p.name }}</div>
+                                    <span class="badge bg-light text-secondary border">{{ p.product_id_str }}</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ p.product_type }}</div>
+                            <div class="text-tertiary small fw-medium">{{ p.brand }} • {{ p.category }}</div>
+                        </td>
+                        <td>
+                            {% if p.current_stock == 0 %}
+                                <span class="badge-soft-danger"><i class="fa-solid fa-ban"></i> Out of Stock</span>
+                            {% elif p.current_stock <= p.reorder_level %}
+                                <span class="badge-soft-danger"><i class="fa-solid fa-triangle-exclamation"></i> Low Stock</span>
+                            {% elif p.current_stock <= p.reorder_level * 1.5 %}
+                                <span class="badge-soft-warning"><i class="fa-solid fa-circle-exclamation"></i> Near Low</span>
+                            {% else %}
+                                <span class="badge-soft-success"><i class="fa-solid fa-circle-check"></i> Healthy</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="fs-5 fw-bold tabular-nums {% if p.current_stock <= p.reorder_level %}text-danger{% else %}text-dark{% endif %}">
+                                    {{ p.current_stock }}
+                                </div>
+                                <span class="text-secondary small fw-semibold">/ {{ p.reorder_level }}</span>
+                            </div>
+                        </td>
+                        <td class="text-end text-nowrap">
+                            <button class="btn btn-sm btn-secondary-custom me-1" onclick="viewDetails('{{ p.product_id_str }}', '{{ p.name|replace('\'', '\\\'') }}', '{{ p.product_type }}', '{{ p.brand }}', '{{ p.current_stock }}', '{{ p.reorder_level }}', '{{ p.price }}', '{{ p.supplier_name }}', '{{ p.sku }}', '{{ p.mrp }}', '{{ p.cost_price }}')" title="View Details">
+                                <i class="fa-solid fa-eye text-secondary"></i>
+                            </button>
+                            <button class="btn btn-sm btn-secondary-custom me-1" onclick="openStockInModal('{{ p.id }}', '{{ p.name }}')" title="Stock In">
+                                <i class="fa-solid fa-arrow-down text-success"></i>
+                            </button>
+                            <button class="btn btn-sm btn-secondary-custom" onclick="openStockOutModal('{{ p.id }}', '{{ p.name }}', {{ p.current_stock }})" title="Stock Out">
+                                <i class="fa-solid fa-arrow-up text-danger"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- View Details Modal -->
+<div class="modal fade" id="detailsModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-content-custom">
+            <div class="modal-header modal-header-custom">
+                <h5 class="modal-title fw-bold"><i class="fa-solid fa-box text-primary me-2"></i> Product Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-4">
+                    <h5 id="detName" class="fw-bold text-dark mb-1"></h5>
+                    <span id="detCode" class="badge bg-light text-secondary border"></span>
+                </div>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <div class="text-secondary small fw-bold">TYPE</div>
+                        <div id="detType" class="text-dark fw-semibold"></div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-secondary small fw-bold">BRAND</div>
+                        <div id="detBrand" class="text-dark fw-semibold"></div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-secondary small fw-bold">CURRENT STOCK</div>
+                        <div id="detStock" class="text-dark fw-bold fs-5"></div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-secondary small fw-bold">REORDER LEVEL</div>
+                        <div id="detReorder" class="text-dark fw-semibold mt-1"></div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-secondary small fw-bold">SKU</div>
+                        <div id="detSku" class="text-dark fw-semibold mt-1"></div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-secondary small fw-bold">SUPPLIER</div>
+                        <div id="detSupplier" class="text-dark fw-semibold mt-1"></div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-secondary small fw-bold">MRP</div>
+                        <div id="detMrp" class="text-dark fw-semibold mt-1"></div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-secondary small fw-bold">UNIT PRICE</div>
+                        <div id="detPrice" class="text-success fw-bold mt-1"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer modal-footer-custom bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="{{ url_for('inventory.history') }}" class="btn btn-primary-custom">View History</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stock In Modal -->
+<div class="modal fade" id="stockInModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-content-custom">
+            <form action="{{ url_for('inventory.stock_in') }}" method="POST">
+                <div class="modal-header modal-header-custom">
+                    <h5 class="modal-title fw-bold text-success"><i class="fa-solid fa-arrow-down me-2"></i> Stock In</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-light">
+                    <div class="mb-3 bg-white p-3 rounded border">
+                        <label class="form-label text-secondary small fw-bold">SELECT PRODUCT</label>
+                        <select name="product_id" id="stockInProductSelect" class="form-select form-select-custom select-product-rich" required>
+                            <option value="">Select a product...</option>
+                            {% for p in products %}
+                                <option value="{{ p.id }}" data-pid="{{ p.product_id_str }}" data-name="{{ p.name }}" data-brand="{{ p.brand }}" data-category="{{ p.category }}" data-stock="{{ p.current_stock }}">{{ p.product_id_str }} - {{ p.name }} (Current: {{ p.current_stock }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3 bg-white p-3 rounded border">
+                        <label class="form-label text-secondary small fw-bold">QUANTITY TO ADD *</label>
+                        <input type="number" name="quantity" class="form-control form-control-custom" min="1" placeholder="e.g. 50" required>
+                    </div>
+                    <div class="mb-0 bg-white p-3 rounded border">
+                        <label class="form-label text-secondary small fw-bold">NOTES / PO NUMBER</label>
+                        <input type="text" name="notes" class="form-control form-control-custom" placeholder="e.g. Restock shipment from supplier">
+                    </div>
+                </div>
+                <div class="modal-footer modal-footer-custom">
+                    <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success text-white fw-bold"><i class="fa-solid fa-check me-1"></i> Confirm</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Stock Out Modal -->
+<div class="modal fade" id="stockOutModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-content-custom">
+            <form action="{{ url_for('inventory.stock_out') }}" method="POST">
+                <div class="modal-header modal-header-custom">
+                    <h5 class="modal-title fw-bold text-danger"><i class="fa-solid fa-arrow-up me-2"></i> Stock Out</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-light">
+                    <div class="mb-3 bg-white p-3 rounded border">
+                        <label class="form-label text-secondary small fw-bold">SELECT PRODUCT</label>
+                        <select name="product_id" id="stockOutProductSelect" class="form-select form-select-custom select-product-rich" required>
+                            <option value="">Select a product...</option>
+                            {% for p in products %}
+                                <option value="{{ p.id }}" data-pid="{{ p.product_id_str }}" data-name="{{ p.name }}" data-brand="{{ p.brand }}" data-category="{{ p.category }}" data-stock="{{ p.current_stock }}">{{ p.product_id_str }} - {{ p.name }} (Available: {{ p.current_stock }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3 bg-white p-3 rounded border">
+                        <label class="form-label text-secondary small fw-bold">QUANTITY TO DISPATCH *</label>
+                        <input type="number" name="quantity" class="form-control form-control-custom" min="1" placeholder="e.g. 10" required>
+                    </div>
+                    <div class="mb-0 bg-white p-3 rounded border">
+                        <label class="form-label text-secondary small fw-bold">NOTES / REASON</label>
+                        <input type="text" name="notes" class="form-control form-control-custom" placeholder="e.g. Order dispatch / Damage write-off">
+                    </div>
+                </div>
+                <div class="modal-footer modal-footer-custom">
+                    <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger text-white fw-bold"><i class="fa-solid fa-check me-1"></i> Confirm</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modify Balance Modal -->
+<div class="modal fade" id="modifyModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-content-custom">
+            <form action="{{ url_for('inventory.modify_stock') }}" method="POST">
+                <div class="modal-header modal-header-custom">
+                    <h5 class="modal-title fw-bold text-dark"><i class="fa-solid fa-sliders me-2 text-primary"></i> Adjust Balance</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-light">
+                    <div class="mb-3 bg-white p-3 rounded border">
+                        <label class="form-label text-secondary small fw-bold">SELECT PRODUCT</label>
+                        <select name="product_id" class="form-select form-select-custom" required>
+                            {% for p in products %}
+                                <option value="{{ p.id }}">{{ p.product_id_str }} - {{ p.name }} (Current: {{ p.current_stock }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3 bg-white p-3 rounded border">
+                        <label class="form-label text-secondary small fw-bold">NEW ABSOLUTE STOCK LEVEL *</label>
+                        <input type="number" name="new_stock" class="form-control form-control-custom" min="0" placeholder="e.g. 100" required>
+                    </div>
+                    <div class="mb-0 bg-white p-3 rounded border">
+                        <label class="form-label text-secondary small fw-bold">ADJUSTMENT AUDIT NOTE</label>
+                        <input type="text" name="notes" class="form-control form-control-custom" placeholder="e.g. Physical inventory audit correction">
+                    </div>
+                </div>
+                <div class="modal-footer modal-footer-custom">
+                    <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-custom fw-bold"><i class="fa-solid fa-save me-1"></i> Apply</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openStockInModal(id, name) {
+    $('#stockInProductSelect').val(id).trigger('change');
+    new bootstrap.Modal(document.getElementById('stockInModal')).show();
+}
+
+function openStockOutModal(id, name, stock) {
+    $('#stockOutProductSelect').val(id).trigger('change');
+    new bootstrap.Modal(document.getElementById('stockOutModal')).show();
+}
+
+function viewDetails(code, name, type, brand, stock, reorder, price, supplier, sku, mrp, cost_price) {
+    document.getElementById('detCode').innerText = code;
+    document.getElementById('detName').innerText = name;
+    document.getElementById('detType').innerText = type;
+    document.getElementById('detBrand').innerText = brand;
+    document.getElementById('detStock').innerText = stock;
+    document.getElementById('detReorder').innerText = reorder;
+    document.getElementById('detPrice').innerText = '₹' + parseFloat(price).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('detMrp').innerText = '₹' + parseFloat(mrp).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('detSku').innerText = sku;
+    document.getElementById('detSupplier').innerText = supplier;
+    new bootstrap.Modal(document.getElementById('detailsModal')).show();
+}
+
+function onCategoryChange() {
+    // This is handled by setupDependentBrandFilter globally now.
+    // The global function fetches from API and dispatches 'change' event on brandFilter
+}
+
+function applyFilters() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    let productType = (document.getElementById('productTypeFilter').value || '').trim();
+    let category = (document.getElementById('categoryFilter').value || '').trim();
+    let brand = (document.getElementById('brandFilter').value || '').trim();
+    let status = (document.getElementById('statusFilter').value || '').trim();
+
+    if (productType.toLowerCase() === 'all' || productType.toLowerCase().startsWith('all ')) productType = '';
+    if (category.toLowerCase() === 'all' || category.toLowerCase().startsWith('all ')) category = '';
+    if (brand.toLowerCase() === 'all' || brand.toLowerCase().startsWith('all ')) brand = '';
+    if (status.toLowerCase() === 'all' || status.toLowerCase().startsWith('all ')) status = '';
+
+    const rows = document.querySelectorAll('.inventory-row');
+    
+    rows.forEach(row => {
+        const rName = (row.getAttribute('data-name') || '').toLowerCase();
+        const rCode = (row.getAttribute('data-code') || '').toLowerCase();
+        const rType = row.getAttribute('data-type') || '';
+        const rCategory = row.getAttribute('data-category') || '';
+        const rBrand = row.getAttribute('data-brand') || '';
+        const rStatus = row.getAttribute('data-status') || '';
+
+        let matchesSearch = search === '' || rName.includes(search) || rCode.includes(search);
+        let matchesType = !productType || rType.toLowerCase() === productType.toLowerCase();
+        let matchesCategory = !category || rCategory.toLowerCase() === category.toLowerCase();
+        let matchesBrand = !brand || rBrand.toLowerCase() === brand.toLowerCase();
+        let matchesStatus = !status || rStatus.toLowerCase() === status.toLowerCase();
+
+        if (matchesSearch && matchesType && matchesCategory && matchesBrand && matchesStatus) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+function resetFilters() {
+    $('#searchInput').val('');
+    $('#statusFilter').val('').trigger('change');
+    if (window.inventoryFilterManager) {
+        window.inventoryFilterManager.reset();
+    } else {
+        $('#productTypeFilter').val('').trigger('change');
+        $('#categoryFilter').val('').trigger('change');
+        $('#brandFilter').val('').trigger('change');
+    }
+    applyFilters();
+}
+
+function filterLowStockRows() {
+    document.getElementById('statusFilter').value = 'low_stock';
+    applyFilters();
+    document.getElementById('inventoryTable').scrollIntoView({ behavior: 'smooth' });
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    // Setup dependent dropdown for filters using global utilities
+    const filterManager = new DependentFilterManager({
+        typeEl: 'productTypeFilter',
+        categoryEl: 'categoryFilter',
+        brandEl: 'brandFilter',
+        placeholderType: 'All Types',
+        placeholderCategory: 'All Categories',
+        placeholderBrand: 'All Brands',
+        onChangeCallback: () => applyFilters()
+    });
+    window.inventoryFilterManager = filterManager;
+    
+    // Add event listeners for direct changes on other filters
+    document.getElementById('statusFilter').addEventListener('change', applyFilters);
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('filter') === 'low_stock') {
+        filterLowStockRows();
+    }
+    
+    // Auto-open modals from sidebar links
+    const action = urlParams.get('action');
+    if (action === 'in') {
+        new bootstrap.Modal(document.getElementById('stockInModal')).show();
+    } else if (action === 'out') {
+        new bootstrap.Modal(document.getElementById('stockOutModal')).show();
+    }
+
+    // Reset modals on close so manual buttons open empty selectors
+    $('#stockInModal, #stockOutModal, #modifyModal').on('hidden.bs.modal', function () {
+        $(this).find('select').val('').trigger('change');
+        $(this).find('form')[0].reset();
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory Transaction History - Smart Inventory AI{% endblock %}
+{% block header_title %}Inventory Audit Logs & Transaction History{% endblock %}
+
+{% block content %}
+<style>
+    /* Table Redesign */
+    .table-modern {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .table-modern thead tr {
+        background-color: #EFF6FF;
+    }
+    .table-modern thead th {
+        color: #1E293B;
+        font-weight: 600;
+        border: none;
+        padding: 16px;
+        border-bottom: 2px solid #CBD5E1;
+        white-space: nowrap;
+    }
+    .table-modern tbody tr {
+        background-color: #FFFFFF;
+        transition: background-color 0.3s ease;
+    }
+    .table-modern tbody tr:nth-child(even) {
+        background-color: #F9FAFB;
+    }
+    .table-modern tbody tr:hover {
+        background-color: #E0F2FE;
+    }
+    .table-modern tbody td {
+        border: none;
+        border-bottom: 1px solid #E2E8F0;
+        padding: 16px;
+        vertical-align: middle;
+    }
+    
+    /* Transaction Badges */
+    .tx-badge {
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    /* Table Container Shadow */
+    .table-container {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid #E2E8F0;
+    }
+</style>
+
+<div class="card bg-white p-4 border-0" style="border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="d-flex align-items-center" style="font-size: 32px; font-weight: 700; color: #1E3A8A; margin-bottom: 4px;">
+                <i class="fa-solid fa-clock-rotate-left text-primary me-3"></i> Inventory Transaction Log
+            </h4>
+            <p style="color: #4B5563; font-size: 15px; margin-bottom: 0;">Immutable record of all Stock In, Stock Out, and Balance modifications</p>
+        </div>
+        <a href="{{ url_for('inventory.index') }}" class="btn btn-outline-secondary" style="border-radius: 8px; font-weight: 500;">
+            <i class="fa-solid fa-arrow-left me-1"></i> Back to Inventory Stock
+        </a>
+    </div>
+
+    <div class="table-responsive table-container">
+        <table class="table-modern mb-0">
+            <thead>
+                <tr>
+                    <th>Log ID</th>
+                    <th>Date & Time</th>
+                    <th>Product Code</th>
+                    <th>Product Name</th>
+                    <th>Transaction Type</th>
+                    <th>Quantity Delta</th>
+                    <th>Audit Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tx in transactions %}
+                <tr>
+                    <td><span style="color: #374151; font-weight: 600;">#{{ tx.id }}</span></td>
+                    <td>
+                        <span style="color: #374151; font-weight: 500; font-size: 0.95rem;">
+                            <i class="fa-regular fa-clock me-1 text-secondary"></i> {{ tx.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        </span>
+                    </td>
+                    <td><span class="badge bg-light text-secondary border">{{ tx.product.product_id_str if tx.product else 'N/A' }}</span></td>
+                    <td style="color: #111827; font-weight: 600;">{{ tx.product.name if tx.product else 'N/A' }}</td>
+                    <td>
+                        <span class="badge tx-badge {% if tx.transaction_type == 'Stock In' %}bg-success{% elif tx.transaction_type == 'Stock Out' %}bg-danger{% else %}bg-info{% endif %}">
+                            {{ tx.transaction_type }}
+                        </span>
+                    </td>
+                    <td>
+                        <span style="font-weight: 700; color: {% if tx.quantity > 0 %}#16A34A{% elif tx.quantity < 0 %}#DC2626{% else %}#374151{% endif %};">
+                            {% if tx.quantity > 0 %}+{% endif %}{{ tx.quantity }} units
+                        </span>
+                    </td>
+                    <td style="color: #374151; font-size: 14px; white-space: normal; min-width: 250px;">
+                        {{ tx.notes or 'No audit note provided' }}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center py-5" style="color: #4B5563; font-weight: 600;">
+                        No inventory transactions logged yet.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

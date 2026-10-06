@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Register - Smart Inventory AI{% endblock %}
+
+{% block login_content %}
+<div class="min-vh-100 d-flex align-items-center justify-content-center bg-light py-5" style="background: radial-gradient(circle at center, #f8fafc 0%, #e2e8f0 100%);"
+    style="background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);">
+    <div class="container" style="max-width: 440px;">
+        <div class="card card-stats p-4 p-md-5 border-0 shadow-lg">
+            <div class="text-center mb-4">
+                <div class="icon-box icon-purple mx-auto mb-3" style="width: 64px; height: 64px; font-size: 2rem;">
+                    <i class="fa-solid fa-user-plus"></i>
+                </div>
+                <h3 class="fw-bold text-dark mb-1">Create Account</h3>
+                <p class="text-secondary small">Join Smart Inventory Management AI</p>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show border-0 small mb-3" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <form action="{{ url_for('auth.register') }}" method="POST">
+                <div class="mb-3">
+                    <label for="username" class="form-label text-secondary small fw-bold">USERNAME</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light text-secondary border-0"><i
+                                class="fa-solid fa-user"></i></span>
+                        <input type="text" class="form-control form-control-custom" id="username" name="username"
+                            placeholder="Choose a username" required autofocus>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="email" class="form-label text-secondary small fw-bold">EMAIL ADDRESS</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light text-secondary border-0"><i
+                                class="fa-solid fa-envelope"></i></span>
+                        <input type="email" class="form-control form-control-custom" id="email" name="email"
+                            placeholder="Enter your email" required>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label for="password" class="form-label text-secondary small fw-bold">PASSWORD</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light text-secondary border-0"><i
+                                class="fa-solid fa-lock"></i></span>
+                        <input type="password" class="form-control form-control-custom" id="password" name="password"
+                            placeholder="Create a password" required>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2.5 fw-bold shadow-sm">
+                    <i class="fa-solid fa-user-plus me-2"></i> Register Account
+                </button>
+            </form>
+
+            <div class="mt-4 pt-3 border-top border-light text-center">
+                <p class="text-secondary small mb-0">Already have an account? <a href="{{ url_for('auth.login') }}"
+                        class="text-primary text-decoration-none fw-bold">Log in here</a></p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

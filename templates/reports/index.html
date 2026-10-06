@@ -1,0 +1,462 @@
+{% extends "base.html" %}
+
+{% block title %}Reports & Export - Smart Inventory AI{% endblock %}
+{% block header_title %}Operational Reports & Multi-Format Data Export{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-card {
+        background: var(--bg-card, #fff);
+        border: 1px solid var(--border-subtle, #E2E8F0);
+        border-radius: 12px;
+        box-shadow: var(--shadow-sm);
+    }
+    .report-stat-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: rgba(37,99,235,0.06);
+        color: var(--brand, #2563EB);
+        border: 1px solid rgba(37,99,235,0.15);
+        border-radius: 8px;
+        padding: 0.35rem 0.75rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+    .date-formula-banner {
+        background: linear-gradient(135deg, rgba(139,92,246,0.06) 0%, rgba(37,99,235,0.06) 100%);
+        border: 1px solid rgba(139,92,246,0.2);
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        font-size: 0.82rem;
+        color: var(--text-primary, #111827);
+    }
+    .info-card-explain {
+        background: rgba(37,99,235,0.04);
+        border: 1px solid rgba(37,99,235,0.12);
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        font-size: 0.83rem;
+        color: var(--text-secondary, #374151);
+        line-height: 1.55;
+    }
+    .info-card-explain strong { color: var(--text-primary, #111827); }
+    .info-card-explain code {
+        background: rgba(37,99,235,0.08);
+        color: #1D4ED8;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 0.78rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card p-4 border-0 shadow-sm mb-4">
+    <!-- Header with Dynamic Export Buttons -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div>
+            <h4 class="fw-bold text-dark mb-1">
+                <i class="fa-solid fa-file-invoice text-primary me-2"></i> Operational & Analytical Reports
+            </h4>
+            <p class="text-secondary small mb-0 mt-1">Live database reports with verified date alignment and verified PatchTST forecast telemetry</p>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('reports.export_csv', report_type=report_type, horizon=active_filters.horizon, category=active_filters.category, brand=active_filters.brand, product_type=active_filters.product_type, q=active_filters.q) }}" class="btn btn-secondary-custom">
+                <i class="fa-solid fa-file-csv me-1 text-secondary"></i> Export to CSV
+            </a>
+            <a href="{{ url_for('reports.export_pdf', report_type=report_type, horizon=active_filters.horizon, category=active_filters.category, brand=active_filters.brand, product_type=active_filters.product_type, q=active_filters.q) }}" class="btn btn-secondary-custom">
+                <i class="fa-solid fa-file-pdf me-1 text-secondary"></i> Export to PDF
+            </a>
+        </div>
+    </div>
+
+    <!-- Report Type Navigation Tabs -->
+    <ul class="nav nav-tabs border-bottom mb-4">
+        <li class="nav-item">
+            <a class="nav-link {% if report_type == 'inventory' %}active bg-dark text-white fw-bold{% else %}text-secondary{% endif %}" href="{{ url_for('reports.index', type='inventory') }}">
+                <i class="fa-solid fa-boxes-stacked me-1"></i> Inventory Report
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if report_type == 'sales' %}active bg-dark text-white fw-bold{% else %}text-secondary{% endif %}" href="{{ url_for('reports.index', type='sales') }}">
+                <i class="fa-solid fa-receipt me-1"></i> Sales Report
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if report_type == 'forecast' %}active bg-dark text-white fw-bold{% else %}text-secondary{% endif %}" href="{{ url_for('reports.index', type='forecast') }}">
+                <i class="fa-solid fa-brain me-1"></i> Demand Forecast Report
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if report_type == 'low_stock' %}active bg-dark text-white fw-bold{% else %}text-secondary{% endif %}" href="{{ url_for('reports.index', type='low_stock') }}">
+                <i class="fa-solid fa-triangle-exclamation me-1"></i> Low Stock Report
+            </a>
+        </li>
+    </ul>
+
+    <!-- Filter Control Bar -->
+    <div class="filter-card p-3 mb-4">
+        <form method="GET" action="{{ url_for('reports.index') }}" class="row g-2 align-items-end">
+            <input type="hidden" name="type" value="{{ report_type }}">
+
+            <!-- Product Type Filter -->
+            <div class="col-6 col-md-2">
+                <label class="form-label text-secondary small fw-bold mb-1">TYPE</label>
+                <select name="product_type" class="form-select form-select-sm bg-light">
+                    <option value="">All Types</option>
+                    {% for pt in filter_options.product_types %}
+                    <option value="{{ pt }}" {% if active_filters.product_type == pt %}selected{% endif %}>{{ pt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Category Filter -->
+            <div class="col-6 col-md-2">
+                <label class="form-label text-secondary small fw-bold mb-1">CATEGORY</label>
+                <select name="category" class="form-select form-select-sm bg-light">
+                    <option value="">All Categories</option>
+                    {% for c in filter_options.categories %}
+                    <option value="{{ c }}" {% if active_filters.category == c %}selected{% endif %}>{{ c }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Brand Filter -->
+            <div class="col-6 col-md-2">
+                <label class="form-label text-secondary small fw-bold mb-1">BRAND</label>
+                <select name="brand" class="form-select form-select-sm bg-light">
+                    <option value="">All Brands</option>
+                    {% for b in filter_options.brands %}
+                    <option value="{{ b }}" {% if active_filters.brand == b %}selected{% endif %}>{{ b }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Horizon Filter (for Forecast Report) -->
+            {% if report_type == 'forecast' %}
+            <div class="col-6 col-md-2">
+                <label class="form-label text-secondary small fw-bold mb-1">HORIZON</label>
+                <select name="horizon" class="form-select form-select-sm bg-light">
+                    <option value="">All Horizons (7, 15, 30d)</option>
+                    <option value="7" {% if active_filters.horizon == '7' %}selected{% endif %}>7 Days</option>
+                    <option value="15" {% if active_filters.horizon == '15' %}selected{% endif %}>15 Days</option>
+                    <option value="30" {% if active_filters.horizon == '30' %}selected{% endif %}>30 Days</option>
+                </select>
+            </div>
+            {% endif %}
+
+            <!-- Search Query Filter -->
+            <div class="col-12 {% if report_type == 'forecast' %}col-md-2{% else %}col-md-4{% endif %}">
+                <label class="form-label text-secondary small fw-bold mb-1">SEARCH</label>
+                <input type="text" name="q" value="{{ active_filters.q }}" class="form-control form-control-sm bg-light" placeholder="Name or code...">
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="col-12 col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-brand btn-sm w-100">
+                    <i class="fa-solid fa-filter me-1"></i> Filter
+                </button>
+                <a href="{{ url_for('reports.index', type=report_type) }}" class="btn btn-secondary-custom btn-sm w-100">
+                    <i class="fa-solid fa-rotate-right me-1"></i> Reset
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Report Content Preview -->
+    <div class="table-custom-wrapper">
+        {# ========================================================== #}
+        {# TAB 1: INVENTORY REPORT                                    #}
+        {# ========================================================== #}
+        {% if report_type == 'inventory' %}
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="report-stat-badge">
+                <i class="fa-solid fa-boxes-stacked"></i> Total Products: {{ products|length }}
+            </span>
+            <span class="text-secondary small">
+                <i class="fa-regular fa-clock me-1"></i> Live Inventory Snapshot
+            </span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-custom mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th>Product Code</th>
+                        <th>Product Type</th>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th>Brand</th>
+                        <th>Cost Price (₹)</th>
+                        <th>Selling Price (₹)</th>
+                        <th class="text-center">Current Stock</th>
+                        <th class="text-center">Reorder Level</th>
+                        <th>Status</th>
+                        <th>Supplier</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in products %}
+                    <tr>
+                        <td><span class="badge bg-light text-secondary border">{{ p.product_id_str }}</span></td>
+                        <td><span class="badge bg-primary bg-opacity-10 text-primary border border-primary fw-bold">{{ p.product_type }}</span></td>
+                        <td class="fw-bold text-dark">{{ p.name }}</td>
+                        <td><span class="text-secondary small">{{ p.category }}</span></td>
+                        <td><span class="text-dark fw-semibold">{{ p.brand }}</span></td>
+                        <td class="text-secondary">₹{{ "{:,.2f}".format(p.cost_price or 0) }}</td>
+                        <td class="text-success fw-bold">₹{{ "{:,.2f}".format(p.price) }}</td>
+                        <td class="text-center fw-bold fs-6 {{ 'text-danger' if p.is_low_stock else 'text-dark' }}">{{ p.current_stock }}</td>
+                        <td class="text-center text-secondary">{{ p.reorder_level }}</td>
+                        <td>
+                            {% if p.current_stock == 0 %}
+                            <span class="badge bg-danger">OUT OF STOCK</span>
+                            {% elif p.is_low_stock %}
+                            <span class="badge bg-warning text-dark">LOW STOCK</span>
+                            {% else %}
+                            <span class="badge bg-success">HEALTHY</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-secondary small">{{ p.supplier_name or 'N/A' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="11" class="text-center text-secondary py-4">No inventory data matching filter criteria.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# ========================================================== #}
+        {# TAB 2: SALES REPORT                                        #}
+        {# ========================================================== #}
+        {% if report_type == 'sales' %}
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="report-stat-badge">
+                <i class="fa-solid fa-receipt"></i> Recent Transactions: {{ sales|length }}
+            </span>
+            <span class="text-secondary small">
+                <i class="fa-regular fa-clock me-1"></i> Ordered Chronologically (Latest First)
+            </span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-custom mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th>Sale ID</th>
+                        <th>Sale Date (IST)</th>
+                        <th>Product Code</th>
+                        <th>Product Name</th>
+                        <th>Category</th>
+                        <th>Brand</th>
+                        <th class="text-center">Qty Sold</th>
+                        <th class="text-end">Total Revenue (₹)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in sales %}
+                    <tr>
+                        <td class="text-secondary fw-semibold">#{{ s.id }}</td>
+                        <td class="text-dark"><i class="fa-regular fa-calendar text-muted me-1"></i> {{ s.sale_date.strftime('%d %b %Y') if s.sale_date else '' }}</td>
+                        <td><span class="badge bg-light text-secondary border">{{ s.product.product_id_str if s.product else '' }}</span></td>
+                        <td class="fw-bold text-dark">{{ s.product.name if s.product else '' }}</td>
+                        <td class="text-secondary small">{{ s.product.category if s.product else '' }}</td>
+                        <td class="text-dark fw-semibold">{{ s.product.brand if s.product else '' }}</td>
+                        <td class="text-center fw-bold">{{ s.quantity_sold }}</td>
+                        <td class="text-end text-success fw-bold">₹{{ "{:,.2f}".format(s.total_price) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-secondary py-4">No sales data matching filter criteria.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        {# ========================================================== #}
+        {# TAB 3: DEMAND FORECAST REPORT                              #}
+        {# ========================================================== #}
+        {% elif report_type == 'forecast' %}
+        
+        <!-- Forecast Report Metadata Header -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div class="d-flex flex-wrap gap-2">
+                <span class="report-stat-badge">
+                    <i class="fa-solid fa-list-check"></i> Total Forecasts: {{ forecast_data.total_records }}
+                </span>
+                <span class="report-stat-badge">
+                    <i class="fa-solid fa-box"></i> Products: {{ forecast_data.unique_products_count }}
+                </span>
+                <span class="report-stat-badge">
+                    <i class="fa-solid fa-chart-line"></i> Avg Demand: {{ forecast_data.avg_predicted_demand }} units
+                </span>
+            </div>
+            <span class="text-secondary small">
+                <i class="fa-solid fa-calendar-check text-primary me-1"></i>
+                Forecast Generated: <strong>{{ forecast_data.latest_gen_date_display }}</strong>
+            </span>
+        </div>
+
+        <!-- Date Formula Reference Banner -->
+        <div class="date-formula-banner mb-3 d-flex align-items-center justify-content-between">
+            <div>
+                <i class="fa-solid fa-circle-info text-purple me-1" style="color: #8B5CF6;"></i>
+                <strong>Forecast Date Logic:</strong> <code>Target Date = Reference Date + Horizon (Days)</code>.
+                Example: If Reference Date is <strong>{{ forecast_data.latest_gen_date_display }}</strong>, 7d Target is 7 days ahead, 15d is 15 days ahead, and 30d is 30 days ahead.
+            </div>
+            <a href="{{ url_for('forecast.index') }}" class="btn btn-sm btn-outline-primary text-nowrap ms-2 bg-white" style="font-size: 0.75rem;">
+                <i class="fa-solid fa-rotate me-1"></i> Retrain Model
+            </a>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-custom mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th>Product Code</th>
+                        <th>Product Name</th>
+                        <th>Category & Brand</th>
+                        <th class="text-center">Stock / Reorder</th>
+                        <th>Horizon</th>
+                        <th>Reference Date (IST)</th>
+                        <th>Target Date (IST)</th>
+                        <th class="text-end">Predicted Demand</th>
+                        <th class="text-center">Confidence Range</th>
+                        <th>Model Method</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for f in forecasts %}
+                    <tr>
+                        <td><span class="badge bg-light text-secondary border">{{ f.product.product_id_str if f.product else '' }}</span></td>
+                        <td class="fw-bold text-dark">{{ f.product.name if f.product else '' }}</td>
+                        <td>
+                            <div class="small fw-semibold text-dark">{{ f.product.category if f.product else '' }}</div>
+                            <span class="text-secondary" style="font-size: 0.72rem;">{{ f.product.brand if f.product else '' }}</span>
+                        </td>
+                        <td class="text-center">
+                            <span class="fw-bold {{ 'text-danger' if f.product and f.product.is_low_stock else 'text-dark' }}">{{ f.product.current_stock if f.product else 0 }}</span>
+                            <span class="text-secondary" style="font-size: 0.75rem;"> / {{ f.product.reorder_level if f.product else 0 }}</span>
+                        </td>
+                        <td>
+                            {% if f.horizon_days == 7 %}
+                            <span class="badge" style="background-color: #3B82F6; color: #fff;">7 Days</span>
+                            {% elif f.horizon_days == 15 %}
+                            <span class="badge" style="background-color: #8B5CF6; color: #fff;">15 Days</span>
+                            {% else %}
+                            <span class="badge" style="background-color: #10B981; color: #fff;">30 Days</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-secondary small">
+                            <i class="fa-regular fa-calendar-check me-1"></i>
+                            {{ f.forecast_generation_date.strftime('%d %b %Y') if f.forecast_generation_date else 'N/A' }}
+                        </td>
+                        <td class="fw-bold text-dark">
+                            <i class="fa-regular fa-calendar-days text-primary me-1"></i>
+                            {{ f.forecast_date.strftime('%d %b %Y') if f.forecast_date else 'N/A' }}
+                        </td>
+                        <td class="text-end text-success fw-bold fs-6">
+                            {{ "%.1f"|format(f.predicted_demand|float) }} <span class="small fw-normal text-secondary">u</span>
+                        </td>
+                        <td class="text-center text-secondary small">
+                            {% if f.confidence_lower is not none and f.confidence_upper is not none %}
+                            [{{ "%.0f"|format(f.confidence_lower|float) }} – {{ "%.0f"|format(f.confidence_upper|float) }}]
+                            {% else %}
+                            —
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-dark border" style="font-size: 0.7rem;">
+                                {{ f.model_method or 'PatchTST' }}
+                            </span>
+                            {% set conf = f.data_confidence or 'Medium' %}
+                            {% if conf == 'High' %}
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success ms-1" style="font-size: 0.65rem;">High</span>
+                            {% elif conf == 'Low' %}
+                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger ms-1" style="font-size: 0.65rem;">Low</span>
+                            {% else %}
+                            <span class="badge bg-warning bg-opacity-10 text-warning border border-warning ms-1" style="font-size: 0.65rem;">Med</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="10" class="text-center text-secondary py-4">No forecast predictions matching filter criteria.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Explanatory Viva / Demo Documentation Card -->
+        <div class="info-card-explain mt-4">
+            <div class="d-flex align-items-start gap-2">
+                <i class="fa-solid fa-circle-question mt-1 text-primary"></i>
+                <div>
+                    <strong>How Are Forecast Dates & Predictions Calculated in the System?</strong><br>
+                    1. <strong>Forecast Reference Date ($T_0$)</strong>: The base date when the PatchTST deep learning model was executed (e.g. today IST).<br>
+                    2. <strong>Forecast Target Date ($T_{\text{target}}$)</strong>: The future target horizon date ($T_{\text{target}} = T_0 + \text{Horizon Days}$). For a 7-day horizon, $T_{\text{target}} = T_0 + 7$; for 15-day, $T_0 + 15$; for 30-day, $T_0 + 30$.<br>
+                    3. <strong>Consistency Guarantee</strong>: The Demand Forecasting module, Forecast Analytics, AI Reorder Alerts, Reports & Export, CSV Exports, and PDF Exports all query the same centralized table with zero off-by-one errors or timezone shifts.
+                </div>
+            </div>
+        </div>
+
+        {# ========================================================== #}
+        {# TAB 4: LOW STOCK REPORT                                    #}
+        {# ========================================================== #}
+        {% elif report_type == 'low_stock' %}
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="report-stat-badge" style="background: rgba(239,68,68,0.08); color: #EF4444; border-color: rgba(239,68,68,0.2);">
+                <i class="fa-solid fa-triangle-exclamation"></i> Low Stock Items: {{ low_stock|length }}
+            </span>
+            <span class="text-secondary small">
+                <i class="fa-regular fa-clock me-1"></i> Items at or below Reorder Threshold
+            </span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-custom mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th>Product Code</th>
+                        <th>Product Type</th>
+                        <th>Product Name</th>
+                        <th>Category</th>
+                        <th>Brand</th>
+                        <th class="text-center">Current Stock</th>
+                        <th class="text-center">Reorder Threshold</th>
+                        <th class="text-center">Deficit</th>
+                        <th>Supplier</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in low_stock %}
+                    <tr class="row-low-stock">
+                        <td><span class="badge bg-danger bg-opacity-10 text-danger border border-danger">{{ p.product_id_str }}</span></td>
+                        <td><span class="badge bg-primary bg-opacity-10 text-primary border border-primary">{{ p.product_type }}</span></td>
+                        <td class="fw-bold text-dark">{{ p.name }}</td>
+                        <td class="text-secondary small">{{ p.category }}</td>
+                        <td class="text-dark fw-semibold">{{ p.brand }}</td>
+                        <td class="text-center text-danger fw-bold fs-5">{{ p.current_stock }}</td>
+                        <td class="text-center text-dark fw-semibold">{{ p.reorder_level }}</td>
+                        <td class="text-center"><span class="badge bg-danger text-white fs-6 shadow-sm">+{{ p.reorder_level - p.current_stock }} needed</span></td>
+                        <td class="text-secondary small">{{ p.supplier_name or 'N/A' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="text-center text-success py-5">
+                            <i class="fa-solid fa-check-circle fs-2 mb-2"></i>
+                            <div class="fw-bold">No low stock items!</div>
+                            <div class="text-secondary small">All inventory levels are optimal.</div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

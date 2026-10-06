@@ -1,0 +1,621 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory Analytics - Smart Inventory AI{% endblock %}
+{% block header_title %}Advanced Inventory Analytics{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ── KPI Cards ───────────────────────────────────────────── */
+    .kpi-card {
+        background: var(--bg-card, #fff);
+        border: 1px solid var(--border-subtle, #E5E7EB);
+        border-radius: 14px;
+        padding: 1.3rem 1.4rem;
+        box-shadow: var(--shadow-sm);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        height: 100%;
+        position: relative;
+    }
+    .kpi-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+    .kpi-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-secondary, #374151);
+        margin-bottom: 0.45rem;
+    }
+    .kpi-value {
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: var(--text-primary, #111827);
+        line-height: 1.2;
+    }
+    .kpi-sub {
+        font-size: 0.78rem;
+        color: var(--text-secondary, #374151);
+        margin-top: 0.35rem;
+        line-height: 1.4;
+    }
+    .kpi-icon {
+        width: 48px; height: 48px;
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.3rem;
+        flex-shrink: 0;
+    }
+    .kpi-icon.blue { background: rgba(37,99,235,0.1); color: #2563EB; }
+    .kpi-icon.green { background: rgba(34,197,94,0.1); color: #22C55E; }
+    .kpi-icon.red { background: rgba(239,68,68,0.1); color: #EF4444; }
+    .kpi-icon.amber { background: rgba(245,158,11,0.1); color: #F59E0B; }
+    .kpi-icon.purple { background: rgba(139,92,246,0.1); color: #8B5CF6; }
+    .kpi-icon.gray { background: rgba(55,65,81,0.1); color: #374151; }
+
+    /* ── Info tooltips ─────────────────────────────────────── */
+    .kpi-info-btn {
+        position: absolute;
+        top: 10px; right: 12px;
+        background: none; border: none;
+        color: var(--text-secondary, #374151);
+        font-size: 0.85rem;
+        cursor: pointer;
+        padding: 2px 4px;
+        line-height: 1;
+    }
+    .kpi-info-btn:hover { color: var(--brand, #2563EB); }
+
+    /* ── Health Score ─────────────────────────────────────── */
+    .health-bar-bg {
+        width: 100%;
+        height: 8px;
+        background: var(--bg-subtle);
+        border-radius: 4px;
+        overflow: hidden;
+        margin-top: 0.5rem;
+    }
+    .health-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.8s ease;
+    }
+
+    /* ── Period badge ─────────────────────────────────────── */
+    .period-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: rgba(37,99,235,0.07);
+        color: var(--brand, #2563EB);
+        border: 1px solid rgba(37,99,235,0.15);
+        border-radius: 8px;
+        padding: 0.3rem 0.7rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+
+    /* ── Detail tables scroll ────────────────────────────── */
+    .detail-scroll {
+        max-height: 340px;
+        overflow-y: auto;
+    }
+    .detail-scroll::-webkit-scrollbar { width: 4px; }
+    .detail-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+
+    /* ── Formula card ────────────────────────────────────── */
+    .formula-card {
+        background: rgba(37,99,235,0.04);
+        border: 1px solid rgba(37,99,235,0.1);
+        border-radius: 10px;
+        padding: 0.85rem 1rem;
+        font-size: 0.82rem;
+        color: var(--text-secondary, #374151);
+        line-height: 1.55;
+    }
+    .formula-card strong { color: var(--text-primary, #111827); }
+    .formula-card code {
+        background: rgba(37,99,235,0.08);
+        color: #1D4ED8;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 0.78rem;
+    }
+
+    @media (max-width: 768px) {
+        .kpi-value { font-size: 1.4rem; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{# ── Header with Period Badge ─────────────────────────────── #}
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card p-4 border-0 shadow-sm">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div>
+                    <h4 class="fw-bold mb-1" style="color: var(--text-primary) !important;">
+                        <i class="fa-solid fa-chart-pie text-primary me-2"></i> Inventory Analytics Dashboard
+                    </h4>
+                    <p class="text-secondary small mb-0 mt-1">Deep insights into stock movement, valuation, and performance</p>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <span class="period-badge">
+                        <i class="fa-solid fa-calendar-days"></i>
+                        Analysis Period: Last {{ kpis.analysis_days }} Days
+                    </span>
+                    <span class="text-secondary" style="font-size: 0.75rem;">
+                        <i class="fa-solid fa-clock me-1"></i>
+                        Updated: {{ kpis.computed_at.strftime('%d %b %Y') }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Row 1: Financial KPIs ──────────────────────────────── #}
+<div class="row g-3 mb-3">
+    {# Total Inventory Value #}
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-card">
+            <button class="kpi-info-btn" data-bs-toggle="popover" data-bs-trigger="hover focus"
+                    data-bs-content="Total value of all current inventory, calculated using unit cost price × current stock quantity."
+                    title="Total Inventory Value">
+                <i class="fa-solid fa-circle-info"></i>
+            </button>
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="kpi-label">Total Inventory Value</div>
+                    <div class="kpi-value" style="color: var(--brand);">₹{{ "{:,.0f}".format(kpis.total_inventory_cost) }}</div>
+                    <div class="kpi-sub">{{ kpis.total_products }} products at cost price</div>
+                </div>
+                <div class="kpi-icon blue"><i class="fa-solid fa-warehouse"></i></div>
+            </div>
+        </div>
+    </div>
+
+    {# Inventory Turnover #}
+    {% set tr = kpis.turnover_ratio %}
+    {% if tr >= 4 %}
+        {% set tr_color = '#22C55E' %}
+        {% set tr_status = 'Healthy' %}
+    {% elif tr >= 2 %}
+        {% set tr_color = '#F59E0B' %}
+        {% set tr_status = 'Fair' %}
+    {% else %}
+        {% set tr_color = '#EF4444' %}
+        {% set tr_status = 'Low' %}
+    {% endif %}
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-card">
+            <button class="kpi-info-btn" data-bs-toggle="popover" data-bs-trigger="hover focus"
+                    data-bs-content="COGS ÷ Current Inventory at Cost. Measures how many times inventory was sold and replaced in the analysis period. Target: > 4.0x. Uses cost price (not selling price)."
+                    title="Inventory Turnover Ratio">
+                <i class="fa-solid fa-circle-info"></i>
+            </button>
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="kpi-label">Inventory Turnover</div>
+                    <div class="kpi-value" style="color: {{ tr_color }};">{{ "%.2f"|format(tr) }}x</div>
+                    <div class="kpi-sub">
+                        <span class="badge" style="background: {{ tr_color ~ '20' }}; color: {{ tr_color }}; font-size: 0.7rem;">{{ tr_status }}</span>
+                        Target: &gt; 4.0x
+                    </div>
+                </div>
+                <div class="kpi-icon green"><i class="fa-solid fa-arrows-rotate"></i></div>
+            </div>
+        </div>
+    </div>
+
+    {# Inventory Days #}
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-card">
+            <button class="kpi-info-btn" data-bs-toggle="popover" data-bs-trigger="hover focus"
+                    data-bs-content="(Current Inventory at Cost ÷ COGS) × days in period. Indicates how many days current stock would last at the current sales rate."
+                    title="Inventory Days">
+                <i class="fa-solid fa-circle-info"></i>
+            </button>
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="kpi-label">Inventory Days</div>
+                    {% if kpis.inventory_days is not none %}
+                    <div class="kpi-value">{{ "%.0f"|format(kpis.inventory_days) }} <small style="font-size:0.5em; font-weight:500;">days</small></div>
+                    <div class="kpi-sub">Stock covers ~{{ "%.0f"|format(kpis.inventory_days) }} days of sales</div>
+                    {% else %}
+                    <div class="kpi-value text-secondary" style="font-size: 1.3rem;">N/A</div>
+                    <div class="kpi-sub">No sales in period to compute</div>
+                    {% endif %}
+                </div>
+                <div class="kpi-icon purple"><i class="fa-solid fa-hourglass-half"></i></div>
+            </div>
+        </div>
+    </div>
+
+    {# Health Score #}
+    {% set hs = kpis.health_score %}
+    {% if hs >= 80 %}
+        {% set hs_color = '#22C55E' %}
+    {% elif hs >= 60 %}
+        {% set hs_color = '#3B82F6' %}
+    {% elif hs >= 40 %}
+        {% set hs_color = '#F59E0B' %}
+    {% else %}
+        {% set hs_color = '#EF4444' %}
+    {% endif %}
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="kpi-card">
+            <button class="kpi-info-btn" data-bs-toggle="popover" data-bs-trigger="hover focus"
+                    data-bs-content="Composite score (0-100) based on: Turnover (30%), Stock Availability (25%), Dead Stock (20%), Low Stock (15%), Overstock (10%). Higher = healthier inventory."
+                    title="Inventory Health Score">
+                <i class="fa-solid fa-circle-info"></i>
+            </button>
+            <div class="d-flex align-items-center justify-content-between">
+                <div style="flex: 1;">
+                    <div class="kpi-label">Inventory Health</div>
+                    <div class="kpi-value" style="color: {{ hs_color }};">{{ hs }}<small style="font-size: 0.45em; font-weight: 500;">/100</small></div>
+                    <div class="kpi-sub"><span class="badge" style="background: {{ hs_color ~ '20' }}; color: {{ hs_color }}; font-size: 0.7rem;">{{ kpis.health_label }}</span></div>
+                    <div class="health-bar-bg">
+                        <div class="health-bar-fill" style="width: {{ hs }}%; background: {{ hs_color }};"></div>
+                    </div>
+                </div>
+                <div class="kpi-icon green ms-2"><i class="fa-solid fa-heart-pulse"></i></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Row 2: Stock Status KPIs ───────────────────────────── #}
+<div class="row g-3 mb-4">
+    {# Low Stock #}
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <button class="kpi-info-btn" data-bs-toggle="popover" data-bs-trigger="hover focus"
+                    data-bs-content="Products with current stock > 0 but at or below their reorder level. Same logic as Low Stock Alerts."
+                    title="Low Stock">
+                <i class="fa-solid fa-circle-info"></i>
+            </button>
+            <div class="kpi-label">Low Stock</div>
+            <div class="kpi-value" style="color: #F59E0B;">{{ kpis.low_stock_count }}</div>
+            <div class="kpi-sub">items at or below reorder level</div>
+        </div>
+    </div>
+
+    {# Out of Stock #}
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <button class="kpi-info-btn" data-bs-toggle="popover" data-bs-trigger="hover focus"
+                    data-bs-content="Products with zero current stock."
+                    title="Out of Stock">
+                <i class="fa-solid fa-circle-info"></i>
+            </button>
+            <div class="kpi-label">Out of Stock</div>
+            <div class="kpi-value" style="color: #EF4444;">{{ kpis.out_of_stock_count }}</div>
+            <div class="kpi-sub">products with zero inventory</div>
+        </div>
+    </div>
+
+    {# Dead Stock #}
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <button class="kpi-info-btn" data-bs-toggle="popover" data-bs-trigger="hover focus"
+                    data-bs-content="Products with stock > 0 and zero sales in the last {{ kpis.analysis_days }} days. Capital locked = cost_price × current_stock."
+                    title="Dead Stock">
+                <i class="fa-solid fa-circle-info"></i>
+            </button>
+            <div class="kpi-label">Dead Stock</div>
+            <div class="kpi-value" style="color: #374151;">{{ kpis.dead_stock_count }}</div>
+            <div class="kpi-sub">₹{{ "{:,.0f}".format(kpis.dead_stock_value) }} capital locked</div>
+        </div>
+    </div>
+
+    {# Overstock #}
+    <div class="col-6 col-md-3">
+        <div class="kpi-card">
+            <button class="kpi-info-btn" data-bs-toggle="popover" data-bs-trigger="hover focus"
+                    data-bs-content="Products where current stock exceeds their defined maximum stock level."
+                    title="Overstock">
+                <i class="fa-solid fa-circle-info"></i>
+            </button>
+            <div class="kpi-label">Overstock</div>
+            <div class="kpi-value" style="color: #8B5CF6;">{{ kpis.overstock_count }}</div>
+            <div class="kpi-sub">items above maximum level</div>
+        </div>
+    </div>
+</div>
+
+{# ── Fast & Slow Movers ─────────────────────────────────── #}
+<div class="row g-4 mb-4">
+    <div class="col-12 col-lg-6">
+        <div class="card p-4 border-0 shadow-sm h-100">
+            <h5 class="fw-bold mb-3" style="color: var(--text-primary) !important;">
+                <i class="fa-solid fa-rocket text-success me-2"></i> Fast Moving Products
+                <small class="text-secondary fw-normal" style="font-size: 0.72rem;">(Top 5 — last {{ kpis.analysis_days }} days)</small>
+            </h5>
+            <div class="table-responsive">
+                <table class="table table-custom mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Brand</th>
+                            <th class="text-end">Units Sold</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in kpis.fast_moving %}
+                        <tr>
+                            <td>
+                                <div class="fw-bold" style="color: var(--text-primary);">{{ item.product.name }}</div>
+                                <span class="badge bg-light text-secondary border" style="font-size: 0.68rem;">{{ item.product.product_id_str }}</span>
+                            </td>
+                            <td><span class="text-secondary small">{{ item.product.brand }}</span></td>
+                            <td class="text-end"><span class="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2 fw-bold">{{ item.qty }} units</span></td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="text-center text-secondary py-4">No sales data in this period.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card p-4 border-0 shadow-sm h-100">
+            <h5 class="fw-bold mb-3" style="color: var(--text-primary) !important;">
+                <i class="fa-solid fa-snail text-warning me-2"></i> Slow Moving Products
+                <small class="text-secondary fw-normal" style="font-size: 0.72rem;">(Bottom 5 — last {{ kpis.analysis_days }} days)</small>
+            </h5>
+            <div class="table-responsive">
+                <table class="table table-custom mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Brand</th>
+                            <th class="text-end">Units Sold</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in kpis.slow_moving %}
+                        <tr>
+                            <td>
+                                <div class="fw-bold" style="color: var(--text-primary);">{{ item.product.name }}</div>
+                                <span class="badge bg-light text-secondary border" style="font-size: 0.68rem;">{{ item.product.product_id_str }}</span>
+                            </td>
+                            <td><span class="text-secondary small">{{ item.product.brand }}</span></td>
+                            <td class="text-end"><span class="badge bg-warning bg-opacity-10 text-warning border border-warning px-3 py-2 fw-bold">{{ item.qty }} units</span></td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" class="text-center text-secondary py-4">No sales data in this period.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Drill-Down: Dead Stock Details ──────────────────────── #}
+{% if kpis.dead_stock_products %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card p-4 border-0 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0" style="color: var(--text-primary) !important;">
+                    <i class="fa-solid fa-ghost text-secondary me-2"></i> Dead Stock Details
+                </h5>
+                <span class="badge bg-danger">₹{{ "{:,.0f}".format(kpis.dead_stock_value) }} locked</span>
+            </div>
+            <div class="detail-scroll">
+                <div class="table-responsive">
+                    <table class="table table-custom mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th class="text-center">Stock</th>
+                                <th>Last Sale</th>
+                                <th class="text-center">Days Since Sale</th>
+                                <th class="text-end">Unit Cost (₹)</th>
+                                <th class="text-end">Locked Value (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for d in kpis.dead_stock_products %}
+                            <tr>
+                                <td>
+                                    <div class="fw-bold" style="color: var(--text-primary);">{{ d.product.name }}</div>
+                                    <span class="badge bg-light text-secondary border" style="font-size: 0.65rem;">{{ d.product.product_id_str }}</span>
+                                </td>
+                                <td class="text-secondary small">{{ d.product.category }}</td>
+                                <td class="text-center fw-bold text-danger">{{ d.current_stock }}</td>
+                                <td>
+                                    {% if d.last_sale_date %}
+                                    {{ d.last_sale_date.strftime('%d %b %Y') }}
+                                    {% else %}
+                                    <span class="text-danger">Never sold</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if d.days_since_sale is not none %}
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">{{ d.days_since_sale }}d</span>
+                                    {% else %}
+                                    —
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">₹{{ "{:,.0f}".format(d.cost_price) }}</td>
+                                <td class="text-end fw-bold text-danger">₹{{ "{:,.0f}".format(d.locked_value) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── Drill-Down: Low Stock Details ───────────────────────── #}
+{% if kpis.low_stock_products %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card p-4 border-0 shadow-sm">
+            <h5 class="fw-bold mb-3" style="color: var(--text-primary) !important;">
+                <i class="fa-solid fa-triangle-exclamation text-warning me-2"></i> Low Stock Details
+            </h5>
+            <div class="detail-scroll">
+                <div class="table-responsive">
+                    <table class="table table-custom mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th class="text-center">Current Stock</th>
+                                <th class="text-center">Reorder Level</th>
+                                <th class="text-center">Shortfall</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for l in kpis.low_stock_products %}
+                            <tr>
+                                <td>
+                                    <div class="fw-bold" style="color: var(--text-primary);">{{ l.product.name }}</div>
+                                    <span class="badge bg-light text-secondary border" style="font-size: 0.65rem;">{{ l.product.product_id_str }}</span>
+                                </td>
+                                <td class="text-secondary small">{{ l.product.category }}</td>
+                                <td class="text-center fw-bold text-warning">{{ l.current_stock }}</td>
+                                <td class="text-center">{{ l.reorder_level }}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-warning bg-opacity-10 text-warning border border-warning px-2 py-1">-{{ l.shortfall }}</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── Drill-Down: Overstock Details ───────────────────────── #}
+{% if kpis.overstock_products %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card p-4 border-0 shadow-sm">
+            <h5 class="fw-bold mb-3" style="color: var(--text-primary) !important;">
+                <i class="fa-solid fa-boxes-stacked text-purple me-2" style="color: #8B5CF6;"></i> Overstock Details
+            </h5>
+            <div class="detail-scroll">
+                <div class="table-responsive">
+                    <table class="table table-custom mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th class="text-center">Current Stock</th>
+                                <th class="text-center">Max Stock</th>
+                                <th class="text-center">Excess Units</th>
+                                <th class="text-end">Excess Value (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for o in kpis.overstock_products %}
+                            <tr>
+                                <td>
+                                    <div class="fw-bold" style="color: var(--text-primary);">{{ o.product.name }}</div>
+                                    <span class="badge bg-light text-secondary border" style="font-size: 0.65rem;">{{ o.product.product_id_str }}</span>
+                                </td>
+                                <td class="text-center fw-bold" style="color: #8B5CF6;">{{ o.current_stock }}</td>
+                                <td class="text-center">{{ o.maximum_stock }}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-purple bg-opacity-10 border px-2 py-1" style="color: #8B5CF6; border-color: #8B5CF6 !important; background: rgba(139,92,246,0.1);">+{{ o.excess }}</span>
+                                </td>
+                                <td class="text-end fw-bold" style="color: #8B5CF6;">₹{{ "{:,.0f}".format(o.excess_value) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── How Are These Calculated? ───────────────────────────── #}
+<div class="row mb-2">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm" style="height: auto;">
+            <div class="p-3">
+                <a class="d-flex align-items-center justify-content-between text-decoration-none" data-bs-toggle="collapse" href="#formulaDetails" role="button" aria-expanded="false">
+                    <h6 class="fw-bold mb-0" style="color: var(--text-primary) !important;">
+                        <i class="fa-solid fa-calculator text-primary me-2"></i> How Are These KPIs Calculated?
+                    </h6>
+                    <i class="fa-solid fa-chevron-down text-secondary"></i>
+                </a>
+            </div>
+            <div class="collapse" id="formulaDetails">
+                <div class="px-3 pb-3">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <div class="formula-card">
+                                <strong>Inventory Turnover Ratio</strong><br>
+                                <code>COGS ÷ Current Inventory at Cost</code><br>
+                                Measures how many times inventory is sold and replaced during the period.
+                                COGS = Σ(units sold × unit cost price). A higher ratio indicates efficient inventory management.
+                                <br><small class="text-muted">Note: Uses current inventory as proxy for average inventory since historical snapshots are not tracked.</small>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <div class="formula-card">
+                                <strong>Inventory Days</strong><br>
+                                <code>(Current Inventory at Cost ÷ COGS) × Days in Period</code><br>
+                                How many days the current stock would last at the current sales rate. Lower values indicate faster-moving inventory.
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <div class="formula-card">
+                                <strong>Dead Stock</strong><br>
+                                Products with <code>current stock &gt; 0</code> and <strong>zero sales</strong> in the last {{ kpis.analysis_days }} days.
+                                Capital locked is valued at <code>cost price × stock quantity</code>.
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <div class="formula-card">
+                                <strong>Low Stock / Out of Stock / Overstock</strong><br>
+                                Low Stock: <code>stock &gt; 0 AND stock ≤ reorder level</code><br>
+                                Out of Stock: <code>stock = 0</code><br>
+                                Overstock: <code>stock &gt; maximum stock level</code>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="formula-card">
+                                <strong>Inventory Health Score (0–100)</strong><br>
+                                Weighted composite: Turnover (30%) + Stock Availability (25%) + Dead Stock penalty (20%) + Low Stock penalty (15%) + Overstock penalty (10%).
+                                Higher scores indicate healthier inventory. <span class="badge bg-success" style="font-size: 0.65rem;">≥ 80 Excellent</span>
+                                <span class="badge bg-primary" style="font-size: 0.65rem;">≥ 60 Good</span>
+                                <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">≥ 40 Fair</span>
+                                <span class="badge bg-danger" style="font-size: 0.65rem;">&lt; 40 Poor</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Initialize Bootstrap popovers for KPI info buttons
+    document.addEventListener('DOMContentLoaded', function() {
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+        popoverTriggerList.forEach(function(el) {
+            new bootstrap.Popover(el, { placement: 'top', html: false });
+        });
+    });
+</script>
+{% endblock %}
